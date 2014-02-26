@@ -1,10 +1,8 @@
+library("ape")
 
 isoptera<-read.csv("Isoptera.csv",row.names=1)
 
-head(isoptera)
 
-
-library("ape")
 
 
 sp.ls<-unique(isoptera[,c("Taxon","Genus","Subfamily","Family","Order")])

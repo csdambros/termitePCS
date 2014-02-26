@@ -1,0 +1,47 @@
+# This file describes the analysis of the termite phylogenetic community structure in the Amazonian Forests
+
+### Load Packages
+
+```{r load packages}
+
+library("ape")
+
+```
+
+### Import data
+
+```{r import data}
+
+isoptera<-read.csv("Isoptera.csv",row.names=1)
+
+```
+
+
+### Uses taxonomic information to build the basic phylo tree
+
+```{r construct taxonomic tree}
+
+sp.ls<-unique(isoptera[,c("Taxon","Genus","Subfamily","Family","Order")])
+
+sp.ls.int<-as.matrix(data.frame(lapply(sp.ls,as.integer)))
+
+sp.ls.int[is.na(sp.ls.int)]<-0
+
+sp.ls.dist<-(sp.ls.int[,1])%*%t(sp.ls.int[,1]*0+1)!=(sp.ls.int[,1]*0+1)%*%t(sp.ls.int[,1])
+
+for(i in 2:ncol(sp.ls.int)){
+	sp.ls.dist<-
+		as.matrix(sp.ls.dist)+
+		as.matrix((sp.ls.int[,i])%*%t(sp.ls.int[,i]*0+1)!=(sp.ls.int[,i]*0+1)%*%t(sp.ls.int[,i]))
+}
+
+dimnames(sp.ls.dist)<-list(sp.ls[,1],sp.ls[,1])
+
+write.table(sp.ls.dist,"taxodist.csv")
+
+termite.taxophylo<-as.phylo(hclust(as.dist(sp.ls.dist)))
+
+write.tree(termite.taxophylo,"termite.taxophylo.tre")
+```
+
+
