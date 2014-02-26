@@ -1,10 +1,11 @@
-# This file describes the analysis of the termite phylogenetic community structure in the Amazonian Forests
+# This file describes the analysis of the termite phylogenetic community structure in the Amazonian Forest
 
 ### Load Packages
 
 ```{r load packages}
 
-library("ape")
+library(ape)
+library(picante)
 
 ```
 
@@ -13,6 +14,11 @@ library("ape")
 ```{r import data}
 
 isoptera<-read.csv("Isoptera.csv",row.names=1)
+
+#Removes repeated records of the same species in the same subplot (5x2 quadrant)
+
+isoptera<-isoptera[!duplicated(isoptera[,c("Taxon","Location","Grid","Trail","Plot","Distance_beginning","Side")]),]
+
 
 ```
 
@@ -27,6 +33,8 @@ sp.ls.int<-as.matrix(data.frame(lapply(sp.ls,as.integer)))
 
 sp.ls.int[is.na(sp.ls.int)]<-0
 
+# Calculates the taxonomic distance among all species pairs (the code can be improved - get rid of the for loop )
+
 sp.ls.dist<-(sp.ls.int[,1])%*%t(sp.ls.int[,1]*0+1)!=(sp.ls.int[,1]*0+1)%*%t(sp.ls.int[,1])
 
 for(i in 2:ncol(sp.ls.int)){
@@ -39,9 +47,57 @@ dimnames(sp.ls.dist)<-list(sp.ls[,1],sp.ls[,1])
 
 write.table(sp.ls.dist,"taxodist.csv")
 
-termite.taxophylo<-as.phylo(hclust(as.dist(sp.ls.dist)))
+sp.ls.dist<-as.dist(sp.ls.dist)
+
+termite.taxophylo<-as.phylo(hclust(sp.ls.dist))
 
 write.tree(termite.taxophylo,"termite.taxophylo.tre")
+
+# cophenetic(termite.taxophylo) returns the original taxonomic distance
+
 ```
 
+
+```{r }
+
+plot(termite.taxophylo)
+
+```
+
+
+```{r}
+
+attach(isoptera)
+
+
+termite.plot<-tapply(Frequency,list(paste(Location,Grid,Trail,Plot),Taxon),sum)
+termite.plot[is.na(termite.plot)]<-0
+
+termite.plot.PA<-(termite.plot>0)+0 # Easier and faster than ifelse(termite.plot>0,1,0)
+
+detach(isoptera)
+
+```
+
+
+```{r Phylogenetic Analysis}
+
+mpd(termite.plot.PA,cophenetic(termite.taxophylo))
+
+ses.mpd<-ses.mpd(termite.plot.PA,cophenetic(termite.taxophylo))
+
+```
+
+
+```{r Trait analysis}
+
+# Using functional traits (trophic group)
+
+
+
+# Using ecological traits (like in Helmus et al. 2007a,b)
+
+
+
+```
 
