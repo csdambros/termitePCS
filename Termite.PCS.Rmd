@@ -6,6 +6,11 @@
 
 library(ape)
 library(picante)
+library(tree)
+library(reshape)
+
+
+source("phyloBeta.R")
 
 ```
 
@@ -18,6 +23,12 @@ isoptera<-read.csv("Isoptera.csv",row.names=1)
 #Removes repeated records of the same species in the same subplot (5x2 quadrant)
 
 isoptera<-isoptera[!duplicated(isoptera[,c("Taxon","Location","Grid","Trail","Plot","Distance_beginning","Side")]),]
+
+env<-read.csv("environment.csv")
+
+geo.dist<-dist(cbind(env$LAT,env$LONG,env$Alt*0))
+
+env.dist<-dist(cbind(env$Clay))
 
 
 ```
@@ -60,29 +71,155 @@ write.tree(termite.taxophylo,"termite.taxophylo.tre")
 
 ```{r }
 
-plot(termite.taxophylo)
+plot(termite.taxophylo,cex = .3)
 
 ```
 
 
-```{r}
+```{r create response variables}
 
 attach(isoptera)
 
+loc<-factor(paste(Location,Grid,Trail,Plot),levels=paste(env$Location,env$Grid,env$Trail,env$Plot))
 
-termite.plot<-tapply(Frequency,list(paste(Location,Grid,Trail,Plot),Taxon),sum)
+loc.split<-unique(data.frame(env$Location,env$Grid,env$Trail,env$Plot))
+
+termite.plot<-tapply(Frequency,list(loc,Taxon),sum)
 termite.plot[is.na(termite.plot)]<-0
 
 termite.plot.PA<-(termite.plot>0)+0 # Easier and faster than ifelse(termite.plot>0,1,0)
+
+### Simiarity indexes
+
+sor.dist<-vegdist(termite.plot.PA,"bray",binary = TRUE)
+
 
 detach(isoptera)
 
 ```
 
 
+
+``` {r }
+
+dist.PDB<-matrix(NA,nrow(termite.plot),nrow(termite.plot))
+
+for(i in 1:nrow(dist.PDB)){
+	for(j in 1:nrow(dist.PDB)){
+		
+if(j<i&sum(termite.plot[i,])>1&sum(termite.plot[j,])>1){		
+
+termite.phylocom<-melt(termite.plot[c(i,j),])[,c(1,3,2)]
+termite.phylocom<-termite.phylocom[termite.phylocom[,2]>0,]
+PDcalc(termite.taxophylo,termite.phylocom)
+dist.PDB[i,j]<-phyloBeta(termite.taxophylo,termite.phylocom)$PD.beta
+		
+	}
+	
+		}
+		
+	}
+
+dist2.PDB<-as.dist(dist.PDB)
+
+dim(dist2.PDB)
+
+length(dist2.PDB)
+length(dist)
+
+plot(dist2.PDB~dist,pch=21,col=0,bg=adjustcolor(2,alpha=.1))
+
+
+?picante
+
+
+```
+
+
+
+#Regression Tree
+
+```{r}
+
+PCA.term<-prcomp(termite.plot)$x[,1]
+
+reg.tree<-tree(PCA.term~LAT+Clay+Altitude+LONG+P,data=env)
+
+regtree$frame$splits<-ifelse(regtree$frame$splits!=0,"","")
+
+plot(regtree,lwd=2)
+text(regtree,cex=.8,adj=1.2)
+
+
+plot(PCA.term~env$LAT,col=env$Location)
+
+```
+
+
+```{r}
+
+
+ENSpie<-(1/(1-apply(termite.plot,1,PIE)))
+
+ENSpie[ENSpie<0|ENSpie>1000]<-NA
+
+plot(tree(ENSpie~LONG+Altitude,data=env))
+text(tree(ENSpie~LONG+Altitude,data=env))
+
+
+data.frame(ENSpie,env[,1:3])
+
+[is.na(env$Clay),]
+
+summary(lm(ENSpie~LAT+LONG+Clay+Altitude,data=env))
+env
+
+
+
+
+```
+
+
+
 ```{r Phylogenetic Analysis}
 
+## PhyloBetaDiver
+
+ufrac.termite<-unifrac(termite.plot.PA,termite.taxophylo)
+psor.termite<-phylosor(termite.plot.PA,termite.taxophylo)
+betaMNTD.termite<-comdistnt(termite.plot.PA,cophenetic(termite.taxophylo))
+
+plot(1-sor.dist~geo.dist)
+plot(1-ufrac.termite~geo.dist)
+plot(psor.termite~geo.dist)
+plot(betaMNTD.termite~geo.dist)
+
+plot(1-ufrac.termite~env.dist)
+plot(psor.termite~env.dist)
+plot(betaMNTD.termite~env.dist)
+
+
+mantel(sor.dist,geo.dist,na.rm=TRUE)
+mantel(ufrac.termite,geo.dist,na.rm=TRUE)
+mantel(1-psor.termite,geo.dist,na.rm=TRUE)
+mantel(betaMNTD.termite,geo.dist,na.rm = TRUE)
+
+mantel(ufrac.termite,env.dist,na.rm=TRUE)
+mantel(1-psor.termite,env.dist,na.rm=TRUE)
+mantel(betaMNTD.termite,env.dist,na.rm = TRUE)
+
+NMDS.ufrac<-metaMDS(ufrac.termite,k=2)
+NMDS.psor<-metaMDS(psor.termite,k=2)
+NMDS.betaMNTD<-metaMDS(betaMNTD.termite,k=2)
+
+summary(lm(scores(NMDS.ufrac)[,1]~env$LAT+env$LONG+env$Clay))
+summary(lm(scores(NMDS.psor)[,1]~env$LAT+env$LONG+env$Clay))
+summary(lm(scores(NMDS.betaMNTD)[,1]~env$LAT+env$LONG+env$Clay))
+
+
+
 mpd(termite.plot.PA,cophenetic(termite.taxophylo))
+#mpd(termite.plot.PA,as.matrix(sp.ls.dist)) #The same
 
 ses.mpd<-ses.mpd(termite.plot.PA,cophenetic(termite.taxophylo))
 
