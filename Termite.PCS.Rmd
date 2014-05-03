@@ -1,24 +1,29 @@
 # This file describes the analysis of the termite phylogenetic community structure in the Amazonian Forest
 
-### Load Packages
 
-```{r load packages}
+
+```{r Load Packages and functions}
 
 library(ape)
 library(picante)
 library(tree)
 library(reshape)
-
+library(raster)
+library(maptools)
 
 source("phyloBeta.R")
 
 ```
 
-### Import data
 
 ```{r import data}
 
-isoptera<-read.csv("Isoptera.csv",row.names=1)
+folder<-"Shapefiles/"
+
+brazil<-readShapeSpatial(paste(folder,"BR_Contorno.shp",sep=""))
+biomes<-readShapeSpatial(paste(folder,"bioma.shp",sep=""))
+
+isoptera<-read.csv("Isoptera.new.csv",row.names=1)
 
 #Removes repeated records of the same species in the same subplot (5x2 quadrant)
 
@@ -71,7 +76,7 @@ write.tree(termite.taxophylo,"termite.taxophylo.tre")
 
 ```{r }
 
-plot(termite.taxophylo,cex = .3)
+plot(termite.taxophylo,cex = .5)
 
 ```
 
@@ -80,9 +85,13 @@ plot(termite.taxophylo,cex = .3)
 
 attach(isoptera)
 
+#write.csv(unique(data.frame(Location,Grid,Trail,Plot))[-c(1:148),],"jau.csv")
+
 loc<-factor(paste(Location,Grid,Trail,Plot),levels=paste(env$Location,env$Grid,env$Trail,env$Plot))
 
 loc.split<-unique(data.frame(env$Location,env$Grid,env$Trail,env$Plot))
+
+#sum(loc!=paste(Location,Grid,Trail,Plot)) #Must be zero
 
 termite.plot<-tapply(Frequency,list(loc,Taxon),sum)
 termite.plot[is.na(termite.plot)]<-0
@@ -93,11 +102,17 @@ termite.plot.PA<-(termite.plot>0)+0 # Easier and faster than ifelse(termite.plot
 
 sor.dist<-vegdist(termite.plot.PA,"bray",binary = TRUE)
 
-
 detach(isoptera)
 
 ```
 
+
+```{r}
+
+plot(biomes[1,])
+points(env$LONG,env$LAT,pch=21,bg=adjustcolor(1,alpha=.1),col=0,lwd=.1,cex=2)
+
+```
 
 
 ``` {r }
@@ -128,10 +143,6 @@ length(dist2.PDB)
 length(dist)
 
 plot(dist2.PDB~dist,pch=21,col=0,bg=adjustcolor(2,alpha=.1))
-
-
-?picante
-
 
 ```
 
@@ -189,32 +200,116 @@ ufrac.termite<-unifrac(termite.plot.PA,termite.taxophylo)
 psor.termite<-phylosor(termite.plot.PA,termite.taxophylo)
 betaMNTD.termite<-comdistnt(termite.plot.PA,cophenetic(termite.taxophylo))
 
-plot(1-sor.dist~geo.dist)
-plot(1-ufrac.termite~geo.dist)
-plot(psor.termite~geo.dist)
-plot(betaMNTD.termite~geo.dist)
+```
+
+```{r Analysis-NMDSaxes}
+NMDS.sor<-metaMDS(sor.dist,k=2)
+NMDS.ufrac<-metaMDS(ufrac.termite,k=2)
+NMDS.psor<-metaMDS(psor.termite,k=2)
+NMDS.betaMNTD<-metaMDS(betaMNTD.termite,k=2)
+
+summary(lm(scores(NMDS.sor)[,1]~env$LAT+env$LONG+env$Clay))
+summary(lm(scores(NMDS.ufrac)[,1]~env$LAT+env$LONG+env$Clay))
+summary(lm(scores(NMDS.psor)[,1]~env$LAT+env$LONG+env$Clay))
+summary(lm(scores(NMDS.betaMNTD)[,1]~env$LAT+env$LONG+env$Clay))
+
+summary(lm(scores(NMDS.sor)[,1]~env$LAT+env$LONG+env$Clay))
+summary(lm(scores(NMDS.ufrac)[,1]~env$LAT+env$LONG+env$Clay))
+summary(lm(scores(NMDS.psor)[,1]~env$LAT+env$LONG+env$Clay))
+summary(lm(scores(NMDS.betaMNTD)[,1]~env$LAT+env$LONG+env$Clay))
+
+```
+
+
+```{r analyses using raw data (RDA)}
+
+
+```
+
+
+Following the suggestion of Tuomisto and Ruokolainen (2006), we conducted multiple regressions using the distance matrices (Sor,PSor,Ufrac and betaNMDS against DIST and envDIST). 
+
+ We fit GLM models with binomial distribution and a log link for testing the association of taxonomic and phylogenetic similarity against geographical distance, except for betaMNTD that is not a probabilistic measure. For betaMNTD, the model was fit with a poisson distribution and a log link.
+
+``` {r analyses using distance based data (mantel and regression in distances)}
+
+#regressions using similarity matrices
+sor.glm<-glm(sor.dist~geo.dist+env.dist,family=binomial(link="log"))
+ufrac.glm<-glm(ufrac.termite~geo.dist+env.dist,family=binomial(link="log"))
+psor.glm<-glm(psor.termite~geo.dist+env.dist,family=binomial(link="log"))
+betaMNTD.glm<-glm(betaMNTD.termite~geo.dist+env.dist,family="poisson")
+
+summary(sor.glm)
+summary(ufrac.glm)
+summary(psor.glm)
+summary(betaMNTD.glm)
+
+
+
+
+
+
+
+
+
+
+
+#Mantel tests
+mantel(log(sor.dist+0.001),geo.dist,na.rm=TRUE)
+mantel(log(ufrac.termite+0.001),geo.dist,na.rm=TRUE)
+mantel(log(1-psor.termite+0.001),geo.dist,na.rm=TRUE)
+mantel(log(betaMNTD.termite),geo.dist,na.rm = TRUE)
+
+mantel(log(sor.dist+0.001),env.dist,na.rm=TRUE)
+mantel(log(ufrac.termite+0.001),env.dist,na.rm=TRUE)
+mantel(log(1-psor.termite+0.001),env.dist,na.rm=TRUE)
+mantel(log(betaMNTD.termite+0.001),env.dist,na.rm = TRUE)
+
+#Partial Mantel tests
+
+mantel.partial(log(sor.dist+0.001),geo.dist,env.dist,na.rm=TRUE)
+mantel.partial(log(ufrac.termite+0.001),geo.dist,env.dist,na.rm=TRUE)
+mantel.partial(log(1-psor.termite+0.001),geo.dist,env.dist,na.rm=TRUE)
+mantel.partial(log(betaMNTD.termite),geo.dist,env.dist,na.rm = TRUE)
+
+mantel.partial(log(sor.dist+0.001),env.dist,geo.dist,na.rm=TRUE)
+mantel.partial(log(ufrac.termite+0.001),env.dist,geo.dist,na.rm=TRUE)
+mantel.partial(log(1-psor.termite+0.001),env.dist,geo.dist,na.rm=TRUE)
+mantel.partial(log(betaMNTD.termite+0.001),env.dist,geo.dist,na.rm = TRUE)
+
+
+
+```
+
+
+```{r plots}
+
+
+newdata=list(geo.dist=seq(0,15,by=.1))
+
+plot(1-sor.dist~geo.dist,pch=21,bg="dark grey",col=0,xlab="Geographical Distance",ylab="Sorensen index",ylim=c(0,1))
+lines(newdata,1-predict(sor.glm,newdata),col=2,lwd=2)
+
+plot(1-ufrac.termite~geo.dist,pch=21,bg="dark grey",col=0,xlab="Geographical Distance",ylab="Unifrac index",ylim=c(0,1))
+lines(newdata,1-predict(sor.glm,newdata),col=2,lwd=2)
+
+plot(psor.termite~geo.dist,pch=21,bg="dark grey",col=0,xlab="Geographical Distance",ylab="PhyloSor index",ylim=c(0,1))
+lines(newdata,1-predict(sor.glm,newdata),col=2,lwd=2)
+
+plot(betaMNTD.termite~geo.dist,pch=21,bg="dark grey",col=0,xlab="Geographical Distance",ylab="betaMNTD")
+lines(newdata,1-predict(sor.glm,newdata),col=2,lwd=2)
+
 
 plot(1-ufrac.termite~env.dist)
 plot(psor.termite~env.dist)
 plot(betaMNTD.termite~env.dist)
 
 
-mantel(sor.dist,geo.dist,na.rm=TRUE)
-mantel(ufrac.termite,geo.dist,na.rm=TRUE)
-mantel(1-psor.termite,geo.dist,na.rm=TRUE)
-mantel(betaMNTD.termite,geo.dist,na.rm = TRUE)
 
-mantel(ufrac.termite,env.dist,na.rm=TRUE)
-mantel(1-psor.termite,env.dist,na.rm=TRUE)
-mantel(betaMNTD.termite,env.dist,na.rm = TRUE)
+plot(scores(NMDS.betaMNTD),col=as.factor(levels(loc)))
 
-NMDS.ufrac<-metaMDS(ufrac.termite,k=2)
-NMDS.psor<-metaMDS(psor.termite,k=2)
-NMDS.betaMNTD<-metaMDS(betaMNTD.termite,k=2)
-
-summary(lm(scores(NMDS.ufrac)[,1]~env$LAT+env$LONG+env$Clay))
-summary(lm(scores(NMDS.psor)[,1]~env$LAT+env$LONG+env$Clay))
-summary(lm(scores(NMDS.betaMNTD)[,1]~env$LAT+env$LONG+env$Clay))
+plot(scores(NMDS.sor),pch=21,col="dark grey",bg=heat.colors(1000)[round(decostand(env$Clay,"range",na.rm=T),3)*999+1])
+plot(scores(NMDS.betaMNTD),pch=21,col="dark grey",bg=heat.colors(1000)[round(decostand(env$Clay,"range",na.rm=T),3)*999+1])
 
 
 
