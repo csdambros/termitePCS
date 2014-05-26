@@ -76,37 +76,54 @@ TG.RFAD<-FG2[match(colnames(termite.plot),Taxon)]
 
 ### Simiarity indexes
 
-sor.dist<-vegdist(termite.plot.PA,"bray",binary = T)
-sor.dist<-vegdist(termite.plot,"bray")
+sor.dist<-vegdist(termite.plot,"bray",binary = T)
+sor.dist.w<-vegdist(termite.plot[,TG.RFAD=="W"],"bray",binary = T)
+sor.dist.s<-vegdist(termite.plot[,TG.RFAD=="S"],"bray",binary = T)
 
 detach(iso.RFAD)
 
-ufrac.dist<-unifrac(termite.plot,termite.phylo)
-psor.dist<-phylosor(termite.plot,termite.phylo)
-betaMNTD.dist<-comdistnt(termite.plot,cophenetic(termite.phylo))
 
-ufrac.dist.w<-unifrac(termite.plot[,TG.RFAD=="W"],termite.phylo)
-psor.dist.w<-phylosor(termite.plot[,TG.RFAD=="W"],termite.phylo)
-betaMNTD.dist.w<-comdistnt(termite.plot[,TG.RFAD=="W"],cophenetic(termite.phylo))
-
-ufrac.dist.s<-unifrac(termite.plot[,TG.RFAD=="S"],termite.phylo)
-psor.dist.s<-phylosor(termite.plot[,TG.RFAD=="S"],termite.phylo)
-betaMNTD.dist.s<-comdistnt(termite.plot[,TG.RFAD=="S"],cophenetic(termite.phylo))
-
-###
+### Total phylodiversity
 
 ses.pd<-ses.pd(termite.plot[,],termite.phylo,null.model = "taxa.labels")
 ses.mpd<-ses.mpd(termite.plot[,],cophenetic(termite.phylo),null.model = "taxa.labels",abundance.weighted=TRUE)
 ses.mntd<-ses.mntd(termite.plot[,],cophenetic(termite.phylo),null.model = "taxa.labels",abundance.weighted=TRUE)
 
+### Wood feeders phylodiversity
+
 ses.pd.w<-ses.pd(termite.plot[,TG.RFAD=="W"],termite.phylo,null.model = "taxa.labels")
 ses.mpd.w<-ses.mpd(termite.plot[,TG.RFAD=="W"],cophenetic(termite.phylo),null.model = "taxa.labels",abundance.weighted=TRUE)
 ses.mntd.w<-ses.mntd(termite.plot[,TG.RFAD=="W"],cophenetic(termite.phylo),null.model = "taxa.labels",abundance.weighted=TRUE)
+
+### Soil feeders phylodiversity
 
 ses.pd.s<-ses.pd(termite.plot[,TG.RFAD=="S"],termite.phylo,null.model = "taxa.labels")
 ses.mpd.s<-ses.mpd(termite.plot[,TG.RFAD=="S"],cophenetic(termite.phylo),null.model = "taxa.labels",abundance.weighted=TRUE)
 ses.mntd.s<-ses.mntd(termite.plot[,TG.RFAD=="S"],cophenetic(termite.phylo),null.model = "taxa.labels",abundance.weighted=TRUE)
 
+
+### Total phylocomposition
+
+ufrac.dist<-unifrac(termite.plot,termite.phylo)
+psor.dist<-phylosor(termite.plot,termite.phylo)
+betaMNTD.dist<-comdistnt(termite.plot,cophenetic(termite.phylo))
+
+### Wood-feeders phylocomposition
+
+ufrac.dist.w<-unifrac(termite.plot[,TG.RFAD=="W"],termite.phylo)
+psor.dist.w<-phylosor(termite.plot[,TG.RFAD=="W"],termite.phylo)
+betaMNTD.dist.w<-comdistnt(termite.plot[,TG.RFAD=="W"],cophenetic(termite.phylo))
+
+### Soil-feeders phylocomposition
+
+ufrac.dist.s<-unifrac(termite.plot[,TG.RFAD=="S"],termite.phylo)
+psor.dist.s<-phylosor(termite.plot[,TG.RFAD=="S"],termite.phylo)
+betaMNTD.dist.s<-comdistnt(termite.plot[,TG.RFAD=="S"],cophenetic(termite.phylo))
+
+```
+
+
+```{r Results: Association of diversity with environmental variables}
 
 ##Total
 
@@ -159,13 +176,11 @@ summary(lm(ses.mntd.s$mntd.obs.z~env.RFAD$P))
 summary(lm(ses.mntd.s$mntd.obs.z~env.RFAD$N.percentage))
 summary(lm(ses.mntd.s$mntd.obs.z~env.RFAD$Clay))
 
-#####
+```
 
+```{r plots}
 
-plot(ses.pd$pd.obs.z~env.RFAD$P)
-plot(ses.pd.w$pd.obs.z~env.RFAD$P)
-plot(ses.pd.s$pd.obs.z~env.RFAD$P)
-
+# Plot termite phylogeny showing the distribution in trophic groups
 
 op<-par(no.readonly=TRUE)
 
@@ -177,6 +192,9 @@ colors[is.na(colors)]<-4
 tiplabels(pch=22, col=0, bg=colors, cex=1.5,adj=.7)
 
 ###
+
+#Plot the results for the total using MNTD (strongest relation)
+
 
 par(op)
 
@@ -210,50 +228,39 @@ title(main="C)",adj=0,cex.main=2)
 
 par(op)
 
-
-plot(ses.mntd$mntd.obs.z~env.RFAD$P)
-
-
-plot(env.RFAD$ant.pred.N,ses.pd$pd.obs)
-plot(env.RFAD$ant.pred.N,ses.pd$pd.obs.z)
-
-plot(env.RFAD$P,ses.pd$pd.obs)
-plot(env.RFAD$P,ses.pd$pd.obs.z)
-
-plot(env.RFAD$Clay,ses.pd$pd.obs)
-plot(env.RFAD$Clay,ses.pd$pd.obs.z)
-
-
-summary(lm(ses.mpd$mpd.obs~env.RFAD$ant.pred.N))
-summary(lm(ses.pd$pd.obs.z~env.RFAD$P))
-summary(lm(ses.pd$pd.obs.z~env.RFAD$Clay))
-
-
-plot(env.RFAD$ant.pred.N,ses.mpd$mpd.obs)
-summary(lm(ses.mpd$mpd.obs.z~env.RFAD$P))
-summary(lm(ses.mpd$mpd.obs.z~env.RFAD$Clay))
-
-plot(ses.pd$pd.rand.mean,ses.pd$pd.obs)
-
-plot(ses.pd$ntaxa,ses.pd$pd.obs)
-
-
 ```
 
 
 ```{r}
 
 geo.dist<-dist(cbind(env.RFAD$LAT,env.RFAD$LONG,env.RFAD$Alt*0))
-env.dist<-dist(cbind(env.RFAD$Clay))
-
+env.dist<-dist(cbind(env.RFAD$P,env.RFAD$Clay))
 
 ```
 
 ```{r}
 
 pcoa.sor<-scores(cmdscale(sor.dist))
+
 pcoa.psor<-scores(cmdscale(psor.dist))
 pcoa.ufrac<-scores(cmdscale(ufrac.dist))
+
+pcoa.sor.w<-scores(cmdscale(sor.dist.w))
+
+pcoa.psor.w<-scores(cmdscale(psor.dist.w))
+pcoa.ufrac.w<-scores(cmdscale(ufrac.dist.w))
+
+pcoa.sor.s<-scores(cmdscale(sor.dist.s))
+pcoa.psor.s<-scores(cmdscale(psor.dist.s))
+pcoa.ufrac.s<-scores(cmdscale(ufrac.dist.s))
+
+
+```
+
+
+```{r }
+
+
 
 plot(pcoa.sor[,1]~env.RFAD$Clay)
 plot(pcoa.psor[,1]~env.RFAD$Clay)

@@ -1,3 +1,8 @@
+---
+output:
+  html_document:
+    toc: yes
+---
 # This file describes the analysis of the termite phylogenetic community structure in the Amazonian Forest
 
 
@@ -16,6 +21,7 @@ source("phyloBeta.R")
 ```
 
 
+
 ```{r import data}
 
 folder<-"Shapefiles/"
@@ -31,12 +37,49 @@ isoptera<-isoptera[!duplicated(isoptera[,c("Taxon","Location","Grid","Trail","Pl
 
 env<-read.csv("environment.csv")
 
-geo.dist<-dist(cbind(env$LAT,env$LONG,env$Alt*0))
+```
 
-env.dist<-dist(cbind(env$Clay))
+```{r import raster files from worldclim}
 
+attach(env)
+
+wclim1 <- raster::getData("worldclim", var="bio", res=.5, path="",lon=min(LONG-1,na.rm=T),lat=min(LAT-1,na.rm=T))
+wclim2 <- raster::getData("worldclim", var="bio", res=.5, path="",lon=max(LONG+1,na.rm=T),lat=max(LAT+1,na.rm=T))
+wclim3 <- raster::getData("worldclim", var="bio", res=.5, path="",lon=max(LONG+1,na.rm=T),lat=min(LAT-1,na.rm=T))
+wclim4 <- raster::getData("worldclim", var="bio", res=.5, path="",lon=min(LONG-1,na.rm=T),lat=max(LAT+1,na.rm=T))
+
+
+wclim1.alt <- raster::getData("worldclim", var="alt", res=.5, path="",lon=min(LONG-1,na.rm=T),lat=min(LAT-1,na.rm=T))
+wclim2.alt <- raster::getData("worldclim", var="alt", res=.5, path="",lon=max(LONG+1,na.rm=T),lat=max(LAT+1,na.rm=T))
+wclim3.alt <- raster::getData("worldclim", var="alt", res=.5, path="",lon=max(LONG+1,na.rm=T),lat=min(LAT-1,na.rm=T))
+wclim4.alt <- raster::getData("worldclim", var="alt", res=.5, path="",lon=min(LONG-1,na.rm=T),lat=max(LAT+1,na.rm=T))
+
+wclim1<-crop(wclim1,extent(min(LONG-1,na.rm=T),max(LONG+1,na.rm=T),min(LAT-1,na.rm=T),max(LAT+1,na.rm=T)))
+wclim2<-crop(wclim2,extent(min(LONG-1,na.rm=T),max(LONG+1,na.rm=T),min(LAT-1,na.rm=T),max(LAT+1,na.rm=T)))
+wclim3<-crop(wclim3,extent(min(LONG-1,na.rm=T),max(LONG+1,na.rm=T),min(LAT-1,na.rm=T),max(LAT+1,na.rm=T)))
+wclim4<-crop(wclim4,extent(min(LONG-1,na.rm=T),max(LONG+1,na.rm=T),min(LAT-1,na.rm=T),max(LAT+1,na.rm=T)))
+
+wclim1.alt<-crop(wclim1.alt,extent(min(LONG-1,na.rm=T),max(LONG+1,na.rm=T),min(LAT-1,na.rm=T),max(LAT+1,na.rm=T)))
+wclim2.alt<-crop(wclim2.alt,extent(min(LONG-1,na.rm=T),max(LONG+1,na.rm=T),min(LAT-1,na.rm=T),max(LAT+1,na.rm=T)))
+wclim3.alt<-crop(wclim3.alt,extent(min(LONG-1,na.rm=T),max(LONG+1,na.rm=T),min(LAT-1,na.rm=T),max(LAT+1,na.rm=T)))
+wclim4.alt<-crop(wclim4.alt,extent(min(LONG-1,na.rm=T),max(LONG+1,na.rm=T),min(LAT-1,na.rm=T),max(LAT+1,na.rm=T)))
+
+
+wclim<-merge(wclim1,wclim2,wclim3,wclim4)
+wclim.alt<-merge(wclim1.alt,wclim2.alt,wclim3.alt,wclim4.alt)
+
+detach(env)
+
+env<-cbind(env,extract(wclim,env[,c("LONG","LAT")]),alt=extract(wclim.alt,env[,c("LONG","LAT")]))
+
+rm(list=c("wclim1","wclim2","wclim3","wclim4","wclim1.alt","wclim2.alt","wclim3.alt","wclim4.alt","wclim","wclim.alt"))
+
+
+#plot(env[,c("Altitude","alt")])
 
 ```
+
+
 
 
 ### Uses taxonomic information to build the basic phylo tree
@@ -68,8 +111,18 @@ sp.ls.dist<-as.dist(sp.ls.dist)
 termite.taxophylo<-as.phylo(hclust(sp.ls.dist))
 
 write.tree(termite.taxophylo,"termite.taxophylo.tre")
+write.nexus(termite.taxophylo,file="termite.taxophylo.nex")
+
+
 
 # cophenetic(termite.taxophylo) returns the original taxonomic distance
+
+```
+
+```{r import phylo}
+
+termite.taxophylo=read.nexus("termite.taxophylo.nex")
+
 
 ```
 
@@ -96,13 +149,31 @@ loc.split<-unique(data.frame(env$Location,env$Grid,env$Trail,env$Plot))
 termite.plot<-tapply(Frequency,list(loc,Taxon),sum)
 termite.plot[is.na(termite.plot)]<-0
 
+#cbind(rownames(termite.plot),env[,2:5]) #check if the environmental and termite tables are in the same order
+
 termite.plot.PA<-(termite.plot>0)+0 # Easier and faster than ifelse(termite.plot>0,1,0)
+
+### Remove sites with less than 3 species
+
+poor.sites<-rowSums(termite.plot.PA)<3
+
+termite.plot<-termite.plot[poor.sites==FALSE,]
+termite.plot.PA<-termite.plot.PA[poor.sites==FALSE,]
+
+env<-env[poor.sites==FALSE,]
 
 ### Simiarity indexes
 
 sor.dist<-vegdist(termite.plot.PA,"bray",binary = TRUE)
 
 detach(isoptera)
+
+```
+
+```{r}
+
+geo.dist<-dist(cbind(env$LAT,env$LONG,env$Alt*0))
+env.dist<-dist(cbind(env$layer.1,env$layer.2))
 
 ```
 
@@ -203,20 +274,31 @@ betaMNTD.termite<-comdistnt(termite.plot.PA,cophenetic(termite.taxophylo))
 ```
 
 ```{r Analysis-NMDSaxes}
+
 NMDS.sor<-metaMDS(sor.dist,k=2)
 NMDS.ufrac<-metaMDS(ufrac.termite,k=2)
 NMDS.psor<-metaMDS(psor.termite,k=2)
 NMDS.betaMNTD<-metaMDS(betaMNTD.termite,k=2)
 
-summary(lm(scores(NMDS.sor)[,1]~env$LAT+env$LONG+env$Clay))
-summary(lm(scores(NMDS.ufrac)[,1]~env$LAT+env$LONG+env$Clay))
-summary(lm(scores(NMDS.psor)[,1]~env$LAT+env$LONG+env$Clay))
-summary(lm(scores(NMDS.betaMNTD)[,1]~env$LAT+env$LONG+env$Clay))
+summary(lm(scores(NMDS.sor)~LAT+LONG+layer.1+alt,data=env))
+summary(lm(scores(NMDS.ufrac)~LAT+LONG+alt,data=env))
+summary(lm(scores(NMDS.psor)~LAT+LONG+alt,data=env))
+summary(lm(scores(NMDS.betaMNTD)~LAT+LONG+alt,data=env))
 
-summary(lm(scores(NMDS.sor)[,1]~env$LAT+env$LONG+env$Clay))
-summary(lm(scores(NMDS.ufrac)[,1]~env$LAT+env$LONG+env$Clay))
-summary(lm(scores(NMDS.psor)[,1]~env$LAT+env$LONG+env$Clay))
-summary(lm(scores(NMDS.betaMNTD)[,1]~env$LAT+env$LONG+env$Clay))
+library(mgcv)
+
+summary(gam(scores(NMDS.sor)[,1]~s(LAT)+s(layer.1)+s(layer.12),data=env))
+summary(gam(scores(NMDS.ufrac)[,1]~s(LAT)+s(layer.1)+s(layer.12),data=env))
+summary(gam(scores(NMDS.psor)[,1]~s(LAT)+s(layer.1)+s(layer.12),data=env))
+summary(gam(scores(NMDS.betaMNTD)[,1]~s(LAT)+s(layer.1)+s(layer.12),data=env))
+
+
+summary(gam(scores(NMDS.sor)[,1]~s(layer.1)+s(layer.12),data=env))
+
+summary(lm(env$LAT~env$layer.1))
+
+
+plot(scores(NMDS.sor)[,1]~LAT+layer.1+layer.12,data=env)
 
 ```
 
@@ -233,26 +315,30 @@ Following the suggestion of Tuomisto and Ruokolainen (2006), we conducted multip
 
 ``` {r analyses using distance based data (mantel and regression in distances)}
 
+summary(lm(log(psor.termite~geo.dist+env.dist))
+
+summary(lm(sor.dist~geo.dist+env.dist))
+
+
 #regressions using similarity matrices
-sor.glm<-glm(sor.dist~geo.dist+env.dist,family=binomial(link="log"))
-ufrac.glm<-glm(ufrac.termite~geo.dist+env.dist,family=binomial(link="log"))
-psor.glm<-glm(psor.termite~geo.dist+env.dist,family=binomial(link="log"))
-betaMNTD.glm<-glm(betaMNTD.termite~geo.dist+env.dist,family="poisson")
+sor.glm<-glm(sor.dist~geo.dist,family=binomial(link="log"))
+ufrac.glm<-glm(ufrac.termite~geo.dist,family=binomial(link="log"))
+psor.glm<-glm(psor.termite~geo.dist,family=binomial(link="log"))
+betaMNTD.glm<-glm(betaMNTD.termite~geo.dist,family="poisson")
+
 
 summary(sor.glm)
+
+cor(unlist(sor.dist[!is.na(geo.dist)]),predict(sor.glm,type="response"))^2
+
+
+length(predict(sor.glm,type="response"))
+
+length(unlist(sor.dist[!is.na(geo.dist)]))
+
 summary(ufrac.glm)
 summary(psor.glm)
 summary(betaMNTD.glm)
-
-
-
-
-
-
-
-
-
-
 
 #Mantel tests
 mantel(log(sor.dist+0.001),geo.dist,na.rm=TRUE)
@@ -284,27 +370,36 @@ mantel.partial(log(betaMNTD.termite+0.001),env.dist,geo.dist,na.rm = TRUE)
 
 ```{r plots}
 
+par(mfrow=c(2,2),cex.lab=1.5, mar = c(5,5,4,1))
 
-newdata=list(geo.dist=seq(0,15,by=.1))
+newdata=data.frame(geo.dist=seq(0,15,length=100),env.dist=seq(mean(env.dist,na.rm=T),mean(env.dist,na.rm=T),length=100))
+
+#newdata=data.frame(geo.dist=as.vector(geo.dist),env.dist=as.vector(env.dist))
 
 plot(1-sor.dist~geo.dist,pch=21,bg="dark grey",col=0,xlab="Geographical Distance",ylab="Sorensen index",ylim=c(0,1))
-lines(newdata,1-predict(sor.glm,newdata),col=2,lwd=2)
+lines(levels(factor(newdata$geo.dist)),1-tapply(predict(sor.glm,newdata,type="response"),newdata$geo.dist,mean),lwd=2,col=1,lty=2)
+
+title("A)",adj=0,cex.main=2)
 
 plot(1-ufrac.termite~geo.dist,pch=21,bg="dark grey",col=0,xlab="Geographical Distance",ylab="Unifrac index",ylim=c(0,1))
-lines(newdata,1-predict(sor.glm,newdata),col=2,lwd=2)
+lines(levels(factor(newdata$geo.dist)),1-tapply(predict(ufrac.glm,newdata,type="response"),newdata$geo.dist,mean),lwd=2,col=1,lty=2)
+title("B)",adj=0,cex.main=2)
 
 plot(psor.termite~geo.dist,pch=21,bg="dark grey",col=0,xlab="Geographical Distance",ylab="PhyloSor index",ylim=c(0,1))
-lines(newdata,1-predict(sor.glm,newdata),col=2,lwd=2)
-
-plot(betaMNTD.termite~geo.dist,pch=21,bg="dark grey",col=0,xlab="Geographical Distance",ylab="betaMNTD")
-lines(newdata,1-predict(sor.glm,newdata),col=2,lwd=2)
+lines(levels(factor(newdata$geo.dist)),tapply(predict(psor.glm,newdata,type="response"),newdata$geo.dist,mean),lwd=2,col=1,lty=2)
+title("C)",adj=0,cex.main=2)
 
 
+plot(1-betaMNTD.termite~geo.dist,pch=21,bg="dark grey",col=0,xlab="Geographical Distance",ylab="betaMNTD")
+lines(levels(factor(newdata$geo.dist)),1-tapply(predict(betaMNTD.glm,newdata,type="response"),newdata$geo.dist,mean),lwd=2,col=1,lty=2)
+title("D)",adj=0,cex.main=2)
+
+plot(1-sor.dist~env.dist)
 plot(1-ufrac.termite~env.dist)
 plot(psor.termite~env.dist)
-plot(betaMNTD.termite~env.dist)
+plot(1-betaMNTD.termite~env.dist)
 
-
+#plot(env.dist~geo.dist)
 
 plot(scores(NMDS.betaMNTD),col=as.factor(levels(loc)))
 
