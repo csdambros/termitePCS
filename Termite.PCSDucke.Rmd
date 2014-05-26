@@ -1,0 +1,286 @@
+---
+title: "PCSinDuckeFor"
+author: "CSDambros"
+date: "05/19/2014"
+output: html_document
+---
+
+
+
+```{r Load Packages and functions}
+
+library(ape)
+library(picante)
+library(tree)
+library(vegan)
+
+```
+
+
+```{r import data}
+
+isoptera<-read.csv("Isoptera.new.csv",row.names=1)
+
+TG<-read.csv("trophic.groups.csv")
+
+isoptera$FG2<-TG$FG1[match(isoptera$Taxon,TG[,1])]
+
+#Removes repeated records of the same species in the same subplot (5x2 quadrant)
+
+isoptera<-isoptera[!duplicated(isoptera[,c("Taxon","Location","Grid","Trail","Plot","Distance_beginning","Side")]),]
+
+#TG<-tapply(isoptera$Trophic_group,isoptera$Taxon,function(x){levels(isoptera$Trophic_group)[sort(x[is.na(x)==F],decreasing = TRUE)[1]]})
+#write.csv(as.data.frame(TG),"trophic.groups.csv")
+
+
+iso.RFAD<-isoptera[isoptera$Grid=="RFAD",]
+
+env<-read.csv("environment.csv")
+
+env.RFAD<-cbind(env[env$Grid=="RFAD",1:7],read.csv("ducke.env.csv"))
+
+
+```
+
+```{r import phylo}
+
+termite.phylo<-read.nexus("termitephylo.nex")
+
+plot(termite.phylo)
+
+```
+
+```{r create response variables}
+
+attach(iso.RFAD)
+
+#write.csv(unique(data.frame(Location,Grid,Trail,Plot))[-c(1:148),],"jau.csv")
+
+loc<-factor(paste(Location,Grid,Trail,Plot),levels=paste(env.RFAD$Location,env.RFAD$Grid,env.RFAD$Trail,env.RFAD$Plot))
+
+loc.split<-unique(data.frame(env.RFAD$Location,env.RFAD$Grid,env.RFAD$Trail,env.RFAD$Plot))
+
+#sum(loc!=paste(Location,Grid,Trail,Plot)) #Must be zero
+
+termite.plot<-tapply(Frequency,list(loc,Taxon),sum)
+termite.plot[is.na(termite.plot)]<-0
+termite.plot<-termite.plot[,colSums(termite.plot)>0]
+
+#cbind(rownames(termite.plot),env[,2:5]) #check if the environmental and termite tables are in the same order
+
+termite.plot.PA<-(termite.plot>0)+0 # Easier and faster than ifelse(termite.plot>0,1,0)
+
+# Species trophic group
+
+TG.RFAD<-FG2[match(colnames(termite.plot),Taxon)]
+
+### Simiarity indexes
+
+sor.dist<-vegdist(termite.plot.PA,"bray",binary = T)
+sor.dist<-vegdist(termite.plot,"bray")
+
+detach(iso.RFAD)
+
+ufrac.dist<-unifrac(termite.plot,termite.phylo)
+psor.dist<-phylosor(termite.plot,termite.phylo)
+betaMNTD.dist<-comdistnt(termite.plot,cophenetic(termite.phylo))
+
+ufrac.dist.w<-unifrac(termite.plot[,TG.RFAD=="W"],termite.phylo)
+psor.dist.w<-phylosor(termite.plot[,TG.RFAD=="W"],termite.phylo)
+betaMNTD.dist.w<-comdistnt(termite.plot[,TG.RFAD=="W"],cophenetic(termite.phylo))
+
+ufrac.dist.s<-unifrac(termite.plot[,TG.RFAD=="S"],termite.phylo)
+psor.dist.s<-phylosor(termite.plot[,TG.RFAD=="S"],termite.phylo)
+betaMNTD.dist.s<-comdistnt(termite.plot[,TG.RFAD=="S"],cophenetic(termite.phylo))
+
+###
+
+ses.pd<-ses.pd(termite.plot[,],termite.phylo,null.model = "taxa.labels")
+ses.mpd<-ses.mpd(termite.plot[,],cophenetic(termite.phylo),null.model = "taxa.labels",abundance.weighted=TRUE)
+ses.mntd<-ses.mntd(termite.plot[,],cophenetic(termite.phylo),null.model = "taxa.labels",abundance.weighted=TRUE)
+
+ses.pd.w<-ses.pd(termite.plot[,TG.RFAD=="W"],termite.phylo,null.model = "taxa.labels")
+ses.mpd.w<-ses.mpd(termite.plot[,TG.RFAD=="W"],cophenetic(termite.phylo),null.model = "taxa.labels",abundance.weighted=TRUE)
+ses.mntd.w<-ses.mntd(termite.plot[,TG.RFAD=="W"],cophenetic(termite.phylo),null.model = "taxa.labels",abundance.weighted=TRUE)
+
+ses.pd.s<-ses.pd(termite.plot[,TG.RFAD=="S"],termite.phylo,null.model = "taxa.labels")
+ses.mpd.s<-ses.mpd(termite.plot[,TG.RFAD=="S"],cophenetic(termite.phylo),null.model = "taxa.labels",abundance.weighted=TRUE)
+ses.mntd.s<-ses.mntd(termite.plot[,TG.RFAD=="S"],cophenetic(termite.phylo),null.model = "taxa.labels",abundance.weighted=TRUE)
+
+
+##Total
+
+summary(lm(ses.pd$pd.obs.z~env.RFAD$ant.pred.N))
+summary(lm(ses.pd$pd.obs.z~env.RFAD$P))
+summary(lm(ses.pd$pd.obs.z~env.RFAD$N.percentage))
+summary(lm(ses.pd$pd.obs.z~env.RFAD$Clay))
+
+summary(lm(ses.mpd$mpd.obs.z~env.RFAD$ant.pred.N))
+summary(lm(ses.mpd$mpd.obs.z~env.RFAD$P))
+summary(lm(ses.mpd$mpd.obs.z~env.RFAD$N.percentage))
+summary(lm(ses.mpd$mpd.obs.z~env.RFAD$Clay))
+
+summary(lm(ses.mntd$mntd.obs.z~env.RFAD$ant.pred.N))
+summary(lm(ses.mntd$mntd.obs.z~env.RFAD$P))
+summary(lm(ses.mntd$mntd.obs.z~env.RFAD$N.percentage))
+summary(lm(ses.mntd$mntd.obs.z~env.RFAD$Clay))
+
+# Wood feeders
+
+summary(lm(ses.pd.w$pd.obs.z~env.RFAD$ant.pred.N))
+summary(lm(ses.pd.w$pd.obs.z~env.RFAD$P))
+summary(lm(ses.pd.w$pd.obs.z~env.RFAD$N.percentage))
+summary(lm(ses.pd.w$pd.obs.z~env.RFAD$Clay))
+
+summary(lm(ses.mpd.w$mpd.obs.z~env.RFAD$ant.pred.N))
+summary(lm(ses.mpd.w$mpd.obs.z~env.RFAD$P))
+summary(lm(ses.mpd.w$mpd.obs.z~env.RFAD$N.percentage))
+summary(lm(ses.mpd.w$mpd.obs.z~env.RFAD$Clay))
+
+summary(lm(ses.mntd.w$mntd.obs.z~env.RFAD$ant.pred.N))
+summary(lm(ses.mntd.w$mntd.obs.z~env.RFAD$P))
+summary(lm(ses.mntd.w$mntd.obs.z~env.RFAD$N.percentage))
+summary(lm(ses.mntd.w$mntd.obs.z~env.RFAD$Clay))
+
+# Soil feeders
+
+summary(lm(ses.pd.s$pd.obs.z~env.RFAD$ant.pred.N))
+summary(lm(ses.pd.s$pd.obs.z~env.RFAD$P))
+summary(lm(ses.pd.s$pd.obs.z~env.RFAD$N.percentage))
+summary(lm(ses.pd.s$pd.obs.z~env.RFAD$Clay))
+
+summary(lm(ses.mpd.s$mpd.obs.z~env.RFAD$ant.pred.N))
+summary(lm(ses.mpd.s$mpd.obs.z~env.RFAD$P))
+summary(lm(ses.mpd.s$mpd.obs.z~env.RFAD$N.percentage))
+summary(lm(ses.mpd.s$mpd.obs.z~env.RFAD$Clay))
+
+summary(lm(ses.mntd.s$mntd.obs.z~env.RFAD$ant.pred.N))
+summary(lm(ses.mntd.s$mntd.obs.z~env.RFAD$P))
+summary(lm(ses.mntd.s$mntd.obs.z~env.RFAD$N.percentage))
+summary(lm(ses.mntd.s$mntd.obs.z~env.RFAD$Clay))
+
+#####
+
+
+plot(ses.pd$pd.obs.z~env.RFAD$P)
+plot(ses.pd.w$pd.obs.z~env.RFAD$P)
+plot(ses.pd.s$pd.obs.z~env.RFAD$P)
+
+
+op<-par(no.readonly=TRUE)
+
+plot(termite.phylo, show.tip.label=F,plot=TRUE)
+
+colors<-as.numeric(TG.RFAD)[match(termite.phylo$tip.label,colnames(termite.plot))]
+colors[is.na(colors)]<-4
+
+tiplabels(pch=22, col=0, bg=colors, cex=1.5,adj=.7)
+
+###
+
+par(op)
+
+layout(matrix(c(1,1,2,1,1,2,1,1,3,1,1,3),3,4))
+
+par(mar=c(5,5,4,2))
+plot(ses.mntd$mntd.obs.z~env.RFAD$P,cex.lab=2,xlab="P content", ylab= "Phylogenetic diversity",pch=21,col=0,bg=1,cex=1.5)
+
+title(main="A)",adj=0,cex.main=2)
+
+par(mar=c(1,2,2,2))
+plot(termite.phylo, show.tip.label=F,plot=TRUE)
+
+#col.lowp<-termite.plot.PA[order(env.RFAD$P)==1,match(termite.phylo$tip.label,colnames(termite.plot))]
+
+col.highmntd<-termite.plot.PA[order(ses.mntd$mntd.obs.z,decreasing = TRUE)==1,match(termite.phylo$tip.label,colnames(termite.plot))]
+
+tiplabels(pch=22, col=col.highmntd, bg=colors*col.highmntd, cex=1,adj=1)
+
+title(main="B)",adj=0,cex.main=2)
+
+plot(termite.phylo, show.tip.label=F,plot=TRUE)
+
+#col.highp<-termite.plot.PA[order(env.RFAD$P,decreasing = TRUE)==1,match(termite.phylo$tip.label,colnames(termite.plot))]
+
+col.lowmntd<-termite.plot.PA[order(ses.mntd$mntd.obs.z)==1,match(termite.phylo$tip.label,colnames(termite.plot))]
+
+tiplabels(pch=22, col=col.lowmntd, bg=colors*col.lowmntd, cex=1,adj=1)
+
+title(main="C)",adj=0,cex.main=2)
+
+par(op)
+
+
+plot(ses.mntd$mntd.obs.z~env.RFAD$P)
+
+
+plot(env.RFAD$ant.pred.N,ses.pd$pd.obs)
+plot(env.RFAD$ant.pred.N,ses.pd$pd.obs.z)
+
+plot(env.RFAD$P,ses.pd$pd.obs)
+plot(env.RFAD$P,ses.pd$pd.obs.z)
+
+plot(env.RFAD$Clay,ses.pd$pd.obs)
+plot(env.RFAD$Clay,ses.pd$pd.obs.z)
+
+
+summary(lm(ses.mpd$mpd.obs~env.RFAD$ant.pred.N))
+summary(lm(ses.pd$pd.obs.z~env.RFAD$P))
+summary(lm(ses.pd$pd.obs.z~env.RFAD$Clay))
+
+
+plot(env.RFAD$ant.pred.N,ses.mpd$mpd.obs)
+summary(lm(ses.mpd$mpd.obs.z~env.RFAD$P))
+summary(lm(ses.mpd$mpd.obs.z~env.RFAD$Clay))
+
+plot(ses.pd$pd.rand.mean,ses.pd$pd.obs)
+
+plot(ses.pd$ntaxa,ses.pd$pd.obs)
+
+
+```
+
+
+```{r}
+
+geo.dist<-dist(cbind(env.RFAD$LAT,env.RFAD$LONG,env.RFAD$Alt*0))
+env.dist<-dist(cbind(env.RFAD$Clay))
+
+
+```
+
+```{r}
+
+pcoa.sor<-scores(cmdscale(sor.dist))
+pcoa.psor<-scores(cmdscale(psor.dist))
+pcoa.ufrac<-scores(cmdscale(ufrac.dist))
+
+plot(pcoa.sor[,1]~env.RFAD$Clay)
+plot(pcoa.psor[,1]~env.RFAD$Clay)
+
+plot(pcoa.sor[,1]~env.RFAD$ant.pred.N)
+plot(pcoa.psor[,1]~env.RFAD$ant.pred.N)
+
+
+summary(lm(pcoa.sor[,1]~env.RFAD$Clay))
+summary(lm(pcoa.psor[,1]~env.RFAD$Clay))
+
+summary(lm(pcoa.sor[,1]~env.RFAD$ant.pred.N))
+summary(lm(pcoa.psor[,1]~env.RFAD$ant.pred.N))
+
+summary(lm(pcoa.sor[,1]~env.RFAD$P))
+summary(lm(pcoa.psor[,1]~env.RFAD$P))
+
+summary(lm(pcoa.sor[,1]~env.RFAD$Litter))
+summary(lm(pcoa.psor[,1]~env.RFAD$Litter))
+summary(lm(pcoa.ufrac[,1]~env.RFAD$P))
+
+
+plot(pcoa.ufrac[,1]~env.RFAD$P)
+
+
+```
+
+
+
+
