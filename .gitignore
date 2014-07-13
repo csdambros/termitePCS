@@ -9,3 +9,5 @@
 */
 .Rproj.user
 !figure/
+*.pdf
+*.svg
