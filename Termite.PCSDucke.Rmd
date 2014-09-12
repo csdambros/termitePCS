@@ -1,38 +1,92 @@
 ---
-title: "PCSinDuckeFor"
+title: "Phylogenetic and functional diveristy of termites"
 author: "CSDambros"
 date: "05/19/2014"
-output: html_document
+dates: "--" 
+output:
+  pdf_document:
+    number_sections: yes
+    toc: yes
+    fig_caption: true
+abstract: |
+  This document describes in detail all the analyses performed for the phylogenetic and functional diversity of termites in response to ant predation, density of trees, P, and N content. It provides an R script follwing the analyses step by step, from downloading the data from public and permanent repositories to creating graphs and statistical tables. These are some of the ecological questions we tried to answer in this study:
+  
+  * Termites have a strong turnover along P content, but their densities are strongly associated with the density of predatory ants. 
+  
+  * Why are termite species replacing each other along the environmental gradients?
+  
+  * Does the phylogenetic community structure indicates environmental filtering or competition to sort the species?
+  
+  * How ant density affects the co-occurrence of termite species? Are some termites more vulnerable to ant predation?
 ---
 
-Termites have a strong turnover along P content, but their densities are strongly associated with the density of predatory ants. 
-
-Why are termite species replacing each other along the environmental gradients? 
-
-Does the phylogenetic community structure indicates environmental filtering or competition to sort the species?
-
-How ant density affects the co-occurrence of termite species? Are some termites more vulnerable to ant predation?
+\newpage
 
 
-```{r Load Packages and functions}
+```{r setup,echo=FALSE,results='hide'}
+library(knitr)
+
+opts_chunk$set(warning=FALSE,message=FALSE)
+
+```
+
+
+# Load required packages
+
+Some of the analyses run in our study were coded along the text, some analyses were in pre built packages, and some were transformed in functions, which are publicly available on-line.
+
+The following lines load the required libraries, and download and source the necessary functions
+
+
+```{r Load_Packages_and_functions, results='hide'}
 
 library(ape)
 library(picante)
 library(tree)
 library(vegan)
-
+library(FD)
+source(url("http://figshare.com/download/file/1672057/1")) # poncho function for figures
 ```
 
+```{r,echo=FALSE}
+#source(url("http://onlinelibrary.wiley.com/store/10.1111/j.1466-8238.2009.00490.x/asset/supinfo/GEB_490_sm_Appendix_S2.R?v=1&s=5363744bf3127ab77f2438bc5151bca2b30e3d96"))
+```
 
-```{r import data}
+# Import data
 
-isoptera<-read.csv("Isoptera.new.csv",row.names=1)
+Similarly to the functions, we made our datasets publicly available on-line. They are downloaded using the next chunk of code. If you have problems running these lines, you might have an internet connection problem. Try to download the files to your directory using the provided links, and then read the files directly from your folder.
 
-traits<-read.csv("species.traits2.csv",row.names=1)
 
+```{r import_data}
+
+isoptera<-read.csv("Isoptera.new.csv",row.names=1) # termite data
+traits<-read.csv("species.traits2.csv",row.names=1) # termite trait data
+env<-read.csv("environment.csv") # envionmental variables, including ant data
+termite.phylo<-read.nexus("termitephylo.fix.nex")# termite phylogeny
+
+```
+To facilitate handling objects and to reduce the number of objects in the workspace, we incorporated the trait information by species into the long format table with the termite record by colony 
+
+```{r merge_and_clean}
+
+# Include trait data into the termite data
 isoptera$FG2<-traits$FG1[match(isoptera$Taxon,rownames(traits))]
 isoptera$DEF<-traits$Maj[match(isoptera$Taxon,rownames(traits))]
+```
 
+To avoid counting the same termite colony twice, rows with exactly the same information were deleted. Therefore, colonies of the same species found in the same 5x2 plot were counted just once.
+
+```{r cutting_duplicates}
+isoptera<-isoptera[!duplicated(isoptera[,c("Taxon","Location","Grid","Trail","Plot","Distance_beginning","Side")]),]
+iso.RFAD<-isoptera[isoptera$Grid=="RFAD",] #To be fixed and deleted
+```
+```{r selectproper, echo=FALSE,results='hide'}
+# To be fixed and deleted
+iso.RFAD<-isoptera[isoptera$Grid=="RFAD",]
+env.RFAD<-cbind(env[env$Grid=="RFAD",1:7],read.csv("ducke.env.csv"),read.csv("env.RFAD.csv"))
+```
+
+```{r, echo=FALSE}
 # scholtz<-read.csv("scholtz.csv")
 # scholtz.g<-do.call(rbind,strsplit(as.character(scholtz$spp)," "))[,1]
 # 
@@ -41,27 +95,73 @@ isoptera$DEF<-traits$Maj[match(isoptera$Taxon,rownames(traits))]
 # traits<-cbind(traits,scholtz[match(isoptera$Genus[match(rownames(traits),isoptera$Taxon)],scholtz$genus),])
 # 
 # write.csv(traits,"species.traits2.csv")
+```
 
+```{r test, echo=FALSE,eval=FALSE}
 
-#Removes repeated records of the same species in the same subplot (5x2 quadrant)
+###
 
-isoptera<-isoptera[!duplicated(isoptera[,c("Taxon","Location","Grid","Trail","Plot","Distance_beginning","Side")]),]
-
-#TG<-tapply(isoptera$Trophic_group,isoptera$Taxon,function(x){levels(isoptera$Trophic_group)[sort(x[is.na(x)==F],decreasing = TRUE)[1]]})
-#write.csv(as.data.frame(TG),"trophic.groups.csv")
-
-iso.RFAD<-isoptera[isoptera$Grid=="RFAD",]
-
-env<-read.csv("environment.csv")
-
-env.RFAD<-cbind(env[env$Grid=="RFAD",1:7],read.csv("ducke.env.csv"))
+# summary(lm(env.RFAD$P~env.RFAD$lit.P_g.Kg))
+# summary(lm(env.RFAD$P~env.RFAD$Lit.depth))
+# summary(lm(env.RFAD$P~env.RFAD$LIS.1))
+# summary(lm(env.RFAD$P~env.RFAD$LIS.2))
+# summary(lm(env.RFAD$P~env.RFAD$LIS.3))
+# summary(lm(env.RFAD$P~env.RFAD$BELT.1))
+# summary(lm(env.RFAD$P~env.RFAD$BELT.2))
+# summary(lm(env.RFAD$P~env.RFAD$BELT.3))
+# summary(lm(env.RFAD$P~env.RFAD$cla_1))
+# summary(lm(env.RFAD$P~env.RFAD$cla_2))
+# summary(lm(env.RFAD$P~env.RFAD$cla_3))
+# summary(lm(env.RFAD$P~env.RFAD$cla_4))
+# summary(lm(env.RFAD$P~env.RFAD$cla_5))
+# summary(lm(env.RFAD$P~env.RFAD$cla_6))
+# summary(lm(env.RFAD$P~env.RFAD$cla_7))
+# summary(lm(env.RFAD$P~env.RFAD$cla_8))
+# summary(lm(env.RFAD$P~nmds.tree))
+# 
+# 
+# summary(lm(env.RFAD$termite.N~I(env.RFAD$cla_2/env.RFAD$cla_1)))
+# 
+# 
+# summary(lm(env.RFAD$termite.NMDS1~familyP.plot))
+# 
+# summary(lm(env.RFAD$lit.P_g.Kg~familyP.plot))
+# 
+# summary(lm(env.RFAD$termite.NMDS1~env.RFAD$lit.Mg_g.Kg))
+# 
+# summary(lm(env.RFAD$termite.NMDS1~env.RFAD$Lit.depth))
+# summary(lm(env.RFAD$termite.NMDS1~env.RFAD$LIS.1))
+# summary(lm(env.RFAD$termite.NMDS1~env.RFAD$LIS.2))
+# 
+# summary(lm(env.RFAD$termite.NMDS1~env.RFAD$LIS.3))
+# 
+# summary(lm(env.RFAD$termite.NMDS1~env.RFAD$BELT.1))
+# summary(lm(env.RFAD$termite.NMDS1~env.RFAD$BELT.2))
+# 
+# summary(lm(env.RFAD$termite.NMDS1~env.RFAD$BELT.3))
+# 
+# summary(lm(env.RFAD$termite.NMDS1~env.RFAD$cla_1))
+# summary(lm(env.RFAD$termite.NMDS1~env.RFAD$cla_2))
+# summary(lm(env.RFAD$termite.NMDS1~env.RFAD$cla_3))
+# summary(lm(env.RFAD$termite.NMDS1~env.RFAD$cla_4))
+# summary(lm(env.RFAD$termite.NMDS1~env.RFAD$cla_5))
+# summary(lm(env.RFAD$termite.NMDS1~env.RFAD$cla_6))
+# summary(lm(env.RFAD$termite.NMDS1~env.RFAD$cla_7))
+# summary(lm(env.RFAD$termite.NMDS1~env.RFAD$cla_8))
+# 
+# summary(lm(env.RFAD$termite.NMDS1~I(env.RFAD$BELT.3/env.RFAD$BELT.1)))
+# 
+# poncho(termite.plot.PA[!is.na(env.RFAD$LIS.3),],env=env.RFAD$LIS.3[!is.na(env.RFAD$LIS.3)],col=as.integer(TG.RFAD)+1,file="phyloxPA",ylab.bottom = expression("P "(mg/dm^3)),xlab="Sampling units",col.gradient = "tomato",border="black")
+# 
+# poncho(termite.plot.PA[!is.na(env.RFAD$BELT.3),],env=env.RFAD$BELT.3[!is.na(env.RFAD$BELT.3)],col=as.integer(TG.RFAD)+1,file="phyloxPA",ylab.bottom = expression("P "(mg/dm^3)),xlab="Sampling units",col.gradient = "tomato",border="black")
+# 
+# 
+# poncho(termite.plot.PA[!is.na(env.RFAD$BELT.3),],env=env.RFAD$BELT.3[!is.na(env.RFAD$BELT.3)],col=as.integer(TG.RFAD)+1,file="phyloxPA",ylab.bottom = expression("P "(mg/dm^3)),xlab="Sampling units",col.gradient = "tomato",border="black")
 
 ```
 
 
-```{r import phylo}
-
-termite.phylo<-read.nexus("termitephylo.fix.nex")
+```{r, echo=FALSE}
 
 #Correct old phylo tree (Ruptitermes was in the wrong place)
 
@@ -85,150 +185,318 @@ termite.phylo<-read.nexus("termitephylo.fix.nex")
 
 ```
 
+# Extract data from tables
+
+The termie data were stored in the long format. This means that each colony found is represented by a row in the spreadsheet. The species the colonies belong to are attribute of the colonies, so there is a column designating this attribute. All the analyses used in our study require a short table format, where species are in columns and the location they were found are rows. The following lines extract the information from the long format table, and rearange this information in the proper format for analyses. Finally, vectors with the species traits are created. These vectors are in the same order as the species in the new table. 
+
 ```{r extract_data_from_tables}
 
 attach(iso.RFAD)
 
-#write.csv(unique(data.frame(Location,Grid,Trail,Plot))[-c(1:148),],"jau.csv")
+#Create factor with complete location
+loc<-factor(paste(Location,Grid,Trail,Plot),
+	levels=paste(env.RFAD$Location,env.RFAD$Grid,env.RFAD$Trail,env.RFAD$Plot))
 
-loc<-factor(paste(Location,Grid,Trail,Plot),levels=paste(env.RFAD$Location,env.RFAD$Grid,env.RFAD$Trail,env.RFAD$Plot))
-
-loc.split<-unique(data.frame(env.RFAD$Location,env.RFAD$Grid,env.RFAD$Trail,env.RFAD$Plot))
+#Just record the levels in the split format
+loc.split<-unique(data.frame(env.RFAD$Location,
+	env.RFAD$Grid,env.RFAD$Trail,env.RFAD$Plot))
 
 #sum(loc!=paste(Location,Grid,Trail,Plot)) #Must be zero
 
-termite.plot<-tapply(Frequency,list(loc,Taxon),sum)
-termite.plot[is.na(termite.plot)]<-0
-termite.plot<-termite.plot[,colSums(termite.plot)>0]
+termite.plot<-tapply(Frequency,list(loc,Taxon),sum)# Create a table with the species frequency by location
+termite.plot[is.na(termite.plot)]<-0 # Species non detected in a given location are real zeros
+termite.plot<-termite.plot[,colSums(termite.plot)>0] # Trim species with zero occurrences
 
-#cbind(rownames(termite.plot),env[,2:5]) #check if the environmental and termite tables are in the same order
+#check if the environmental and termite tables are in the same order
+#cbind(rownames(termite.plot),env[,2:5]) 
 
-termite.plot.PA<-(termite.plot>0)+0 # Easier and faster than ifelse(termite.plot>0,1,0)
+termite.plot.PA<-(termite.plot>0)+0 # Abund to PA: Easier and faster than ifelse(termite.plot>0,1,0)
 
-# Species trophic group
-
+# Extract species feeding and defense group as vectors
 TG.RFAD<-FG2[match(colnames(termite.plot),Taxon)]
 DEF.RFAD<-DEF[match(colnames(termite.plot),Taxon)]
-
 
 detach(iso.RFAD)
 
 ```
 
+# Calculate pairwise trait distance between species
 
-```{r create_response_variables}
+We created a pairwise similarity matrix between all pairs of species. The matrix was filled with 1s and 0s, representing species pairs sharing or not a particular trait. This was done independently for feeding and defense strategy. See footnote\footnote{Multiply the vector by itself creating a pairwise matrix with one species multiplied by the other.
+Then subtract from the new pairwise matrix, the values of the species multiplied by itself.
+If the species trait value multiplied by its own value (square) equals the species value multiplied by the value of its pair, the pair has the same trait.
+Pair has the same trait, 1, otherwise 0} for explanation on the calculation.
 
-### Simiarity indexes
+```{r tests_for_phylogenetic_signal_in_traits}
+
+TGn<-as.integer(TG.RFAD)# Transform the names of feeding groups in numbers
+names(TGn)<-colnames(termite.plot.PA)# Assign the names of species to the vector of feeding groups
+
+TG.dist<-as.dist((((TGn)%*%t(TGn))-(TGn)^2)!=0)#See footnote
+
+DEFn<-as.integer(DEF.RFAD)# Transform the names of feeding groups in numbers
+names(DEFn)<-colnames(termite.plot.PA)# Assign the names of species to the vector of feeding groups
+
+DEF.dist<-as.dist((((DEFn)%*%t(DEFn))-(DEFn)^2)!=0)#See footnote
+```
+
+# Calculate phylogenetic distance and rearrange columns to match species names in the data
+
+Use the cophenetic function from the ape package to calculate pairwise phylogenetic distances between species. Then match the species in this matrix with those present in the species x matrix. Finally, transform the pairwise matrix in a dist object (triangular matrix).
+
+
+```{r tests_for_phylogenetic_signal_in_traits_cont}
+
+phylo.dist<-cophenetic(termite.phylo)
+phylo.dist<-as.dist(phylo.dist[match(colnames(termite.plot.PA),colnames(phylo.dist)),
+	match(colnames(termite.plot.PA),colnames(phylo.dist))])
+
+```
+
+# Calculates Moran's *I* and mantel correlograms
+
+```{r moransI_manteltests,cache=TRUE}
+
+Moran.I(TGn,as.matrix(phylo.dist))
+Moran.I(DEFn,as.matrix(phylo.dist))
+
+TG.mantel<-mantel.correlog(TG.dist,phylo.dist)
+DEF.mantel<-mantel.correlog(DEF.dist,phylo.dist)
+
+TG.mantel
+DEF.mantel
+```
+\newpage
+
+# Plot trait distances against phylogenetic distance
+
+```{r plot_traitdistxphylodis, fig.height=6,fig.width=12,fig.cap="trait distanc against phylodis"}
+
+par(mfrow=c(1,2),mar=c(5,2,4,2)+.1,oma=c(0,3,0,0),xpd=NA) #set graphical parameter space
+
+plot(1-tapply(as.vector(TG.dist),as.vector(phylo.dist),mean)~sort(unique(phylo.dist)),
+ylab="Probability of shared trait",xlab="Phylogenetic distance",cex.lab=1.5,pch=21,bg=1)
+
+c1<-coef(glm(y~x,family=binomial(link="log"),data=data.frame(y=1-tapply(as.vector(TG.dist),
+as.vector(phylo.dist),mean),x=sort(unique(phylo.dist)))))#line fit using glm
+
+points(exp(cbind(1,seq(2,24,.1))%*%c1)~x,data=data.frame(x=seq(2,24,.1)),type="l")#plot line
+
+title("A)",adj=0,cex.main=1.5)
+
+
+plot(1-tapply(as.vector(DEF.dist),as.vector(phylo.dist),mean)~sort(unique(phylo.dist)),
+ylab="",xlab="Phylogenetic distance",cex.lab=1.5,pch=21,bg=1)
+
+c1<-coef(glm(y~x,family=binomial(link="log"),start = c(a=0,b=-.5),data=data.frame(y=1-tapply(
+as.vector(DEF.dist),as.vector(phylo.dist),mean),x=sort(unique(phylo.dist)))))#line fit using glm
+
+points(exp(cbind(1,seq(2,24,.1))%*%c1)~x,data=data.frame(x=seq(2,24,.1)),type="l")#plot line
+
+title("B)",adj=0,cex.main=1.5)
+```
+
+\newpage
+
+# Plot mantel correlograms
+
+```{r mantel_correlograms, fig.height=6,fig.width=12}
+
+par(mfrow=c(1,2),oma=c(0,1,0,0))#set graphical parameter space
+
+plot(TG.mantel$mantel.res[,3]~TG.mantel$mantel.res[,1],pch=21,bg=TG.mantel$mantel.res[,5]<0.05,
+xlim=c(2,12),type="o",ylab="Mantel correlation",xlab="Phylogenetic distance",cex.lab=1.5)
+abline(h=0,lty=2,col=2)
+
+title("A)",adj=0,cex.main=2)
+
+plot(DEF.mantel$mantel.res[,3]~DEF.mantel$mantel.res[,1],pch=21,bg=DEF.mantel$mantel.res[,5]<0.05,
+xlim=c(2,12),type="o",ylab="Mantel correlation",xlab="Phylogenetic distance",cex.lab=1.5)
+abline(h=0,lty=2,col=2)
+
+title("B)",adj=0,cex.main=2)
+
+
+```
+
+\newpage
+
+# Create response variables
+
+In the following lines, there are the code to create all the response variables used in our study. In the following sections, individual regressions of these variables against the predictor variables present in the environmental dataset are performed.
+
+```{r create_response_variables, cache=TRUE,message=FALSE,results='hide'}
+
+# Overall diversity
+
+termite.N<-rowSums(termite.plot)
+termite.S<-rowSums(termite.plot>0)
+
+termite.N.w<-rowSums(termite.plot[,TG.RFAD=="W"])
+termite.S.w<-rowSums(termite.plot[,TG.RFAD=="W"]>0)
+
+termite.N.s<-rowSums(termite.plot[,TG.RFAD=="S"])
+termite.S.s<-rowSums(termite.plot[,TG.RFAD=="S"]>0)
+
+# Sorensen simiarity matrices (triangular matrices)
 
 sor.dist<-vegdist(termite.plot,"bray",binary = T)
 sor.dist.w<-vegdist(termite.plot[,TG.RFAD=="W"],"bray",binary = T)
 sor.dist.s<-vegdist(termite.plot[,TG.RFAD=="S"],"bray",binary = T)
 
-### Total phylodiversity
+# Total phylodiversity (PD, MPD, and MNTD)
 
 ses.pd<-ses.pd(termite.plot[,],termite.phylo,null.model = "taxa.labels")
-ses.mpd<-ses.mpd(termite.plot[,],cophenetic(termite.phylo),null.model = "taxa.labels",abundance.weighted=TRUE)
-ses.mntd<-ses.mntd(termite.plot[,],cophenetic(termite.phylo),null.model = "taxa.labels",abundance.weighted=TRUE)
+ses.mpd<-ses.mpd(termite.plot[,],cophenetic(termite.phylo),null.model = "taxa.labels",
+abundance.weighted=TRUE)
+ses.mntd<-ses.mntd(termite.plot[,],cophenetic(termite.phylo),null.model = "taxa.labels",
+abundance.weighted=TRUE)
 
-### Wood feeders phylodiversity
+# Wood feeders phylodiversity (PD, MPD, and MNTD)
 
 ses.pd.w<-ses.pd(termite.plot[,TG.RFAD=="W"],termite.phylo,null.model = "taxa.labels")
-ses.mpd.w<-ses.mpd(termite.plot[,TG.RFAD=="W"],cophenetic(termite.phylo),null.model = "taxa.labels",abundance.weighted=TRUE)
-ses.mntd.w<-ses.mntd(termite.plot[,TG.RFAD=="W"],cophenetic(termite.phylo),null.model = "taxa.labels",abundance.weighted=TRUE)
+ses.mpd.w<-ses.mpd(termite.plot[,TG.RFAD=="W"],cophenetic(termite.phylo),null.model = "taxa.labels",
+abundance.weighted=TRUE)
+ses.mntd.w<-ses.mntd(termite.plot[,TG.RFAD=="W"],cophenetic(termite.phylo),null.model = "taxa.labels",
+abundance.weighted=TRUE)
 
-### Soil feeders phylodiversity
+# Soil feeders phylodiversity (PD, MPD, and MNTD)
 
 ses.pd.s<-ses.pd(termite.plot[,TG.RFAD=="S"],termite.phylo,null.model = "taxa.labels")
-ses.mpd.s<-ses.mpd(termite.plot[,TG.RFAD=="S"],cophenetic(termite.phylo),null.model = "taxa.labels",abundance.weighted=TRUE)
-ses.mntd.s<-ses.mntd(termite.plot[,TG.RFAD=="S"],cophenetic(termite.phylo),null.model = "taxa.labels",abundance.weighted=TRUE)
+ses.mpd.s<-ses.mpd(termite.plot[,TG.RFAD=="S"],cophenetic(termite.phylo),null.model = "taxa.labels",
+abundance.weighted=TRUE)
+ses.mntd.s<-ses.mntd(termite.plot[,TG.RFAD=="S"],cophenetic(termite.phylo),null.model = "taxa.labels",
+abundance.weighted=TRUE)
 
-
-### Total phylocomposition
+# Total phylocomposition (Unifrac,PhyloSorensen, and betaMNTD [not used])
 
 ufrac.dist<-unifrac(termite.plot,termite.phylo)
 psor.dist<-phylosor(termite.plot,termite.phylo)
 betaMNTD.dist<-comdistnt(termite.plot,cophenetic(termite.phylo))
 
-### Wood-feeders phylocomposition
+# Wood-feeders phylocomposition (Unifrac,PhyloSorensen, and betaMNTD [not used])
 
 ufrac.dist.w<-unifrac(termite.plot[,TG.RFAD=="W"],termite.phylo)
 psor.dist.w<-phylosor(termite.plot[,TG.RFAD=="W"],termite.phylo)
 betaMNTD.dist.w<-comdistnt(termite.plot[,TG.RFAD=="W"],cophenetic(termite.phylo))
 
-### Soil-feeders phylocomposition
+# Soil-feeders phylocomposition (Unifrac,PhyloSorensen, and betaMNTD [not used])
 
 ufrac.dist.s<-unifrac(termite.plot[,TG.RFAD=="S"],termite.phylo)
 psor.dist.s<-phylosor(termite.plot[,TG.RFAD=="S"],termite.phylo)
 betaMNTD.dist.s<-comdistnt(termite.plot[,TG.RFAD=="S"],cophenetic(termite.phylo))
 
-```
 
-```{r tests_for_phylogenetic_signal_in_traits}
+# Functional diversity
 
-#Calculate trait distance between species pairs (1 or 0 if categorical)
+names(TG.RFAD)<-colnames(termite.plot)
+names(DEF.RFAD)<-colnames(termite.plot)
 
-TGn<-as.integer(TG.RFAD)
-names(TGn)<-colnames(termite.plot.PA)
-TG.dist<-as.dist((((TGn)%*%t(TGn))-(TGn)^2)!=0)
-
-DEFn<-as.integer(DEF.RFAD)
-names(DEFn)<-colnames(termite.plot.PA)
-DEF.dist<-as.dist((((DEFn)%*%t(DEFn))-(DEFn)^2)!=0)
-
-#Calculate phylogenetic distance and rearrange columns to match species names in the data
-phylo.dist<-cophenetic(termite.phylo)
-phylo.dist<-as.dist(phylo.dist[match(colnames(termite.plot.PA),colnames(phylo.dist)),match(colnames(termite.plot.PA),colnames(phylo.dist))])
-
-#####
-
-dev.off()
+TG.fdis<-fdisp(TG.dist,termite.plot)$FDis
+DEF.fdis<-fdisp(DEF.dist,termite.plot)$FDis
 
 
-par(mfrow=c(1,2),mar=c(5,2,4,2)+.1,oma=c(0,3,0,0),xpd=NA)
+#standardied effect size for trait diversity
 
-plot(1-tapply(as.vector(TG.dist),as.vector(phylo.dist),mean)~sort(unique(phylo.dist)),ylab="Probability of shared trait",xlab="Phylogenetic distance",cex.lab=1.5,pch=21,bg=1)
+nrep=999
 
-c1<-coef(glm(y~x,family=binomial(link="log"),data=data.frame(y=1-tapply(as.vector(TG.dist),as.vector(phylo.dist),mean),x=sort(unique(phylo.dist)))))
+TG.fdis.sim<-matrix(nrow=nrow(termite.plot),ncol=nrep)
+TG.dist.null<-TG.dist
 
-points(exp(cbind(1,seq(2,24,.1))%*%c1)~x,data=data.frame(x=seq(2,24,.1)),type="l")
+DEF.fdis.sim<-matrix(nrow=nrow(termite.plot),ncol=nrep)
+DEF.dist.null<-DEF.dist
 
-title("A)",adj=0,cex.main=1.5)
+for(i in 1:nrep){
 
+TG.dist.null[]<-sample(TG.dist)
+DEF.dist.null[]<-sample(DEF.dist)
 
-plot(1-tapply(as.vector(DEF.dist),as.vector(phylo.dist),mean)~sort(unique(phylo.dist)),ylab="",xlab="Phylogenetic distance",cex.lab=1.5,pch=21,bg=1)
-
-c1<-coef(glm(y~x,family=binomial(link="log"),start = c(a=0,b=-.5),data=data.frame(y=1-tapply(as.vector(DEF.dist),as.vector(phylo.dist),mean),x=sort(unique(phylo.dist)))))
-
-points(exp(cbind(1,seq(2,24,.1))%*%c1)~x,data=data.frame(x=seq(2,24,.1)),type="l")
-
-title("B)",adj=0,cex.main=1.5)
-
-TG.mantel<-mantel.correlog(TG.dist,phylo.dist)
-
-plot(TG.mantel$mantel.res[,3]~TG.mantel$mantel.res[,1],pch=21,bg=TG.mantel$mantel.res[,5]<0.05,xlim=c(2,12),type="o",ylab="Mantel correlation",xlab="Phylogenetic distance",cex.lab=1.5)
-abline(h=0,lty=2,col=2)
+TG.fdis.sim[,i]<-fdisp(TG.dist.null,termite.plot)$FDis
+DEF.fdis.sim[,i]<-fdisp(DEF.dist.null,termite.plot)$FDis
 	
+	}
 
-Moran.I(TGn,as.matrix(phylo.dist))
+TG.fdis.ses<-(TG.fdis-rowMeans(TG.fdis.sim))/apply(TG.fdis.sim,1,sd)
+DEF.fdis.ses<-(DEF.fdis-rowMeans(DEF.fdis.sim))/apply(DEF.fdis.sim,1,sd)
 
-###
+
+# Functional composition
+
+#anova.cca(cca(t(aggregate(t(termite.plot),by = list(TG.RFAD),sum)[,-1])~.,data=env.RFAD[,c("ant.pred.N","P")]),by = "terms")	
+#anova.cca(cca(t(aggregate(t(termite.plot),by = list(DEF.RFAD),sum)[,-1])~.,data=env.RFAD[,c("ant.pred.N","P")]),by = "terms")	
+
+TG.pcoa<-prcomp(t(aggregate(t(termite.plot),by = list(TG.RFAD),sum)[,-1]))$x[,1]
+DEF.pcoa<-prcomp(t(aggregate(t(termite.plot),by = list(DEF.RFAD),sum)[,-1]))$x[,1]
+
+TG.nmds<-scores(metaMDS(t(aggregate(t(termite.plot),by = list(TG.RFAD),sum)[,-1])))[,1]
+DEF.nmds<-scores(metaMDS(t(aggregate(t(termite.plot),by = list(DEF.RFAD),sum)[,-1])))[,1]
 
 
-DEF.mantel<-mantel.correlog(DEF.dist,phylo.dist)
+# Separate nestedness and turnover on functional composition (Baselga 2010)
+# Not performed because all groups are represented in all sites (dissimilarity using sor = 0)
 
-plot(DEF.mantel$mantel.res[,3]~DEF.mantel$mantel.res[,1],pch=21,bg=DEF.mantel$mantel.res[,5]<0.05,xlim=c(2,12),type="o",ylab="Mantel correlation",xlab="Phylogenetic distance",cex.lab=1.5)
-abline(h=0,lty=2,col=2)
+#TG.sim.dist<-beta.sim(t(aggregate(t(termite.plot),by = list(TG.RFAD),sum)[,-1]))
+#TG.nes.dist<-beta.nes(t(aggregate(t(termite.plot),by = list(TG.RFAD),sum)[,-1]))
 
-Moran.I(DEFn,as.matrix(phylo.dist))
-
-###
-
+#nes.dist.w<-beta.nes(termite.plot[,TG.RFAD=="W"])
+#nes.dist.s<-beta.nes(termite.plot[,TG.RFAD=="S"])
 
 ```
 
-```{r Results: Association of diversity with environmental variables}
 
-##Total
+# Summarize composition and phylocomposition in PCoA axes
+
+Similar to Duarte et al. (2011), we summarized the phylogenetic dissimilarity matrices in PCoA axes, representing phylogenetic composition. This was performed to all indexes used in our study (Sorensen, PhyloSor, and UniFrac).
+
+
+```{r pcoas_comp_and_phylocomp,results='hide'}
+
+pcoa.sor<-scores(cmdscale(sor.dist))
+
+pcoa.psor<-scores(cmdscale(psor.dist))
+pcoa.ufrac<-scores(cmdscale(ufrac.dist))
+
+pcoa.sor.w<-scores(cmdscale(sor.dist.w))
+
+pcoa.psor.w<-scores(cmdscale(psor.dist.w))
+pcoa.ufrac.w<-scores(cmdscale(ufrac.dist.w))
+
+pcoa.sor.s<-scores(cmdscale(sor.dist.s))
+pcoa.psor.s<-scores(cmdscale(psor.dist.s))
+pcoa.ufrac.s<-scores(cmdscale(ufrac.dist.s))
+```
+
+
+```{r nmds_comp_and_phylocomp,echo=FALSE,eval=FALSE}
+
+
+nmds.sor<-scores(metaMDS(sor.dist))
+
+nmds.psor<-scores(metaMDS(psor.dist))
+nmds.ufrac<-scores(metaMDS(ufrac.dist))
+
+nmds.sor.w<-scores(metaMDS(sor.dist.w))
+
+nmds.psor.w<-scores(metaMDS(psor.dist.w))
+nmds.ufrac.w<-scores(metaMDS(ufrac.dist.w))
+
+nmds.sor.s<-scores(metaMDS(sor.dist.s))
+nmds.psor.s<-scores(metaMDS(psor.dist.s))
+nmds.ufrac.s<-scores(metaMDS(ufrac.dist.s))
+
+```
+
+
+\newpage
+
+# Regression analyses by response variable
+
+For each response variable, we run a multiple regression against the predictor variables. P-values using t and F statistics were similar, but we based our results on the F-statistics results. This answer the question: *Does the inclusion of a given variable significantly increases the explanatory power of the model?*
+You can see a summary of these results as a table in the end of the document
+
+```{r Results.Ass_diversity_env_var_simple,echo=FALSE,eval=FALSE}
+
+##Overall
 
 summary(lm(ses.pd$pd.obs.z~env.RFAD$ant.pred.N))
 summary(lm(ses.pd$pd.obs.z~env.RFAD$ant.nonpred.N))
@@ -247,6 +515,12 @@ summary(lm(ses.mntd$mntd.obs.z~env.RFAD$N.percentage))
 summary(lm(ses.mntd$mntd.obs.z~env.RFAD$Clay))
 
 # Wood feeders
+
+summary(lm(ses.pd.w$ntaxa~env.RFAD$ant.pred.N))
+summary(lm(ses.pd.w$ntaxa~env.RFAD$P))
+summary(lm(ses.pd.w$ntaxa~env.RFAD$N.percentage))
+summary(lm(ses.pd.w$ntaxa~env.RFAD$Clay))
+
 
 summary(lm(ses.pd.w$pd.obs.z~env.RFAD$ant.pred.N))
 summary(lm(ses.pd.w$pd.obs.z~env.RFAD$P))
@@ -280,51 +554,152 @@ summary(lm(ses.mntd.s$mntd.obs.z~env.RFAD$P))
 summary(lm(ses.mntd.s$mntd.obs.z~env.RFAD$N.percentage))
 summary(lm(ses.mntd.s$mntd.obs.z~env.RFAD$Clay))
 
-#### Multiple regressions
+```
 
-summary(lm(ses.pd$pd.obs.z~ant.pred.N+P+N.percentage+Clay,data=env.RFAD))
-summary(lm(ses.mpd$mpd.obs.z~ant.pred.N+P+N.percentage+Clay,data=env.RFAD))
-summary(lm(ses.mntd$mntd.obs.z~ant.pred.N+P+N.percentage+Clay,data=env.RFAD))
+## Overall PD
 
-summary(lm(ses.pd.w$pd.obs.z~ant.pred.N+P+N.percentage+Clay,data=env.RFAD))
-summary(lm(ses.mpd.w$mpd.obs.z~ant.pred.N+P+N.percentage+Clay,data=env.RFAD))
-summary(lm(ses.mntd.w$mntd.obs.z~ant.pred.N+P+N.percentage+Clay,data=env.RFAD))
-
-summary(lm(ses.pd.s$pd.obs.z~ant.pred.N+P+N.percentage+Clay,data=env.RFAD))
-summary(lm(ses.mpd.s$mpd.obs.z~ant.pred.N+P+N.percentage+Clay,data=env.RFAD))
-summary(lm(ses.mntd.s$mntd.obs.z~ant.pred.N+P+N.percentage+Clay,data=env.RFAD))
-
+```{r PD_multiple}
+summary(M1<-lm(ses.pd$pd.obs.z~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))
+anova(M1)
 
 
 ```
+## Overall MPD
+```{r MPD_multiple}
+summary(M1<-lm(ses.mpd$mpd.obs.z~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))
+anova(M1)
+```
+## Overall MNTD
+```{r NMTD_multiple}
+summary(M1<-lm(ses.mntd$mntd.obs.z~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))
+anova(M1)
+```
 
-```{r plots}
+## Overall Sorensen
+```{r sor_multiple}
+summary(M1<-lm(pcoa.sor[,1]~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))
+anova(M1)
+```
 
+## Overall PhyloSorensen
+```{r psor_multiple}
+summary(M1<-lm(pcoa.psor[,1]~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))
+anova(M1)
+```
+
+## Overall Unifrac
+```{r ufrac_multiple}
+summary(M1<-lm(pcoa.ufrac[,1]~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))
+anova(M1)
+```
+
+## Wood feeders PD
+```{r PDw_multiple}
+summary(M1<-lm(ses.pd.w$pd.obs.z~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))
+anova(M1)
+```
+## Wood feeders MPD
+```{r MPDw_multiple}
+summary(M1<-lm(ses.mpd.w$mpd.obs.z~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))
+anova(M1)
+```
+## Wood feeders MNTD
+```{r MNTDw_multiple}
+summary(M1<-lm(ses.mntd.w$mntd.obs.z~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))
+anova(M1)
+```
+
+## Wood feeders Sorensen
+```{r sorw_multiple}
+summary(M1<-lm(pcoa.sor.w[,1]~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))
+anova(M1)
+```
+
+## Wood feeders PhyloSorensen
+```{r psorw_multiple}
+summary(M1<-lm(pcoa.psor.w[,1]~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))
+anova(M1)
+```
+
+## Wood feeders Unifrac
+```{r ufracw_multiple}
+summary(M1<-lm(pcoa.ufrac.w[,1]~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))
+anova(M1)
+```
+
+
+## Soil feeders PD
+```{r PDs_multiple}
+summary(M1<-lm(ses.pd.s$pd.obs.z~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))
+anova(M1)
+```
+## Soil feeders MPD
+
+```{r MPDs_multiple}
+summary(M1<-lm(ses.mpd.s$mpd.obs.z~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))
+anova(M1)
+```
+
+## Soil feeders MNTD
+
+```{r MNTDs_multiple}
+summary(M1<-lm(ses.mntd.s$mntd.obs.z~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))
+anova(M1)
+
+```
+## Soil feeders Sorensen
+```{r sors_multiple}
+summary(M1<-lm(pcoa.sor.s[,1]~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))
+anova(M1)
+```
+
+## Soil feeders PhyloSorensen
+```{r psors_multiple}
+summary(M1<-lm(pcoa.psor.s[,1]~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))
+anova(M1)
+```
+
+## Soil feeders Unifrac
+```{r ufracs_multiple}
+summary(M1<-lm(pcoa.ufrac.s[,1]~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))
+anova(M1)
+```
+
+\newpage
+
+# Plot phylogenetic diversity against *P*
+
+One of the strongest findings in this study was the strong relation of phylogenetic diversity metrics with *P* content.
+
+```{r plots, fig.height=4,fig.width=12,results='hold'}
 
 par(mfrow=c(1,3),mar=c(5,2,4,2)+.1,oma=c(0,3,0,0),xpd=NA)
 
 plot(ses.mntd$mntd.obs.z~env.RFAD$P,cex.lab=1.5,xlab="P content", ylab= "Phylogenetic diversity",pch=21,col=0,bg=1,cex=1.2,ylim=c(-2.5,2.5))
 
-title("A)",adj=0,cex.main=1.5)
+#c1<-coef(nls(y~a+b*exp(c*x),start=list(a=-1,b=1,c=-0.2),data=data.frame(y=ses.mntd$mntd.obs.z,x=env.RFAD$P)))
+#points((c1[1]+c1[2]*exp(c1[3]*x))~x,data=data.frame(x=seq(-1,2.5,.1)),type="l")
 
-c1<-coef(nls(y~a+b*exp(c*x),start=list(a=-1,b=1,c=-0.2),data=data.frame(y=ses.mntd$mntd.obs.z,x=env.RFAD$P)))
-points((c1[1]+c1[2]*exp(c1[3]*x))~x,data=data.frame(x=seq(-1,2.5,.1)),type="l")
+title("A)",adj=0,cex.main=1.5)
 
 plot(ses.mntd.w$mntd.obs.z~env.RFAD$P,cex.lab=1.5,xlab="P content", ylab= "",pch=21,col=0,bg=1,cex=1.2,ylim=c(-2.5,2.5))
 
-title("B)",adj=0,cex.main=1.5)
+#c1<-coef(nls(y~a+b*exp(c*x),start=list(a=-3,b=5,c=-0.8),data=data.frame(y=ses.mntd.w$mntd.obs.z,x=env.RFAD$P)))
+#points((c1[1]+c1[2]*exp(c1[3]*x))~x,data=data.frame(x=seq(-1,2.5,.1)),type="l")
 
-c1<-coef(nls(y~a+b*exp(c*x),start=list(a=-3,b=5,c=-0.8),data=data.frame(y=ses.mntd.w$mntd.obs.z,x=env.RFAD$P)))
-points((c1[1]+c1[2]*exp(c1[3]*x))~x,data=data.frame(x=seq(-1,2.5,.1)),type="l")
+title("B)",adj=0,cex.main=1.5)
 
 plot(ses.mntd.s$mntd.obs.z~env.RFAD$P,cex.lab=1.5,xlab="P content", ylab= "",pch=21,col=0,bg=1,cex=1.2,ylim=c(-2.5,2.5))
 
+#c1<-coef(nls(y~a+b*exp(c*x),start=list(a=1,b=1,c=0.2),data=data.frame(y=ses.mntd.s$mntd.obs.z,x=env.RFAD$P)))
+#points((c1[1]+c1[2]*exp(c1[3]*x))~x,data=data.frame(x=seq(-1,2.5,.1)),type="l")
+
+
 title("C)",adj=0,cex.main=1.5)
 
-c1<-coef(nls(y~a+b*exp(c*x),start=list(a=1,b=1,c=0.2),data=data.frame(y=ses.mntd.s$mntd.obs.z,x=env.RFAD$P)))
+```
 
-points((c1[1]+c1[2]*exp(c1[3]*x))~x,data=data.frame(x=seq(-1,2.5,.1)),type="l")
-
+```{r, echo=FALSE,eval=FALSE}
 
 # Plot termite phylogeny showing the distribution in trophic groups
 
@@ -375,25 +750,36 @@ par(op)
 
 ```
 
-```{r poncho}
+\newpage
+
+# Diagrams: spp. presence by phylo and predictor variable
+
+In these diagrams, species were color coded by their feeding and defense strategies. The species were ordered by their position in the phylogeny and the locations where they were found were ordered by *P* and *ant predator density*
+
+
+```{r poncho1, fig.height=6,fig.width=5}
 
 palette(c("#004CFFFF","black", "#00FF4DFF","#00E5FFFF","tomato","yellow","grey"))
-	
-poncho(termite.plot.PA,phy=termite.phylo,env=env.RFAD$P,col=as.integer(TG.RFAD)+1,file="phyloxPA",ylab.bottom = expression("P "(mg/dm^3)),xlab="Sampling units",col.gradient = "tomato",border="black")
 
-poncho(termite.plot.PA,phy=termite.phylo,env=env.RFAD$P,col=as.integer(DEF.RFAD),file="phyloxPA.DEF",ylab.bottom = expression("P "(mg/dm^3)),xlab="Sampling units",col.gradient = "tomato",border="black")
+poncho(termite.plot.PA,phy=termite.phylo,env=env.RFAD$P,col=as.integer(TG.RFAD)+1,
+	file="phyloxPA",ylab.bottom = expression("P "(mg/dm^3)),xlab="Sampling units",
+	col.gradient = "tomato",border="black")
 
-poncho(termite.plot.PA,phy=termite.phylo,env=env.RFAD$ant.pred.N,col=as.integer(DEF.RFAD),file="phyloxPA.DEF.ant",ylab.bottom = "Ant density",xlab="Sampling units",col.gradient = "tomato",border="black")
+```
 
-poncho(termite.plot.PA,phy=termite.phylo,env=env.RFAD$ant.pred.N,col=as.integer(DEF.RFAD),ylab.bottom = "Ant density",xlab="Sampling units",col.gradient = "tomato",border="black")
+\newpage
 
+```{r poncho2, fig.height=6,fig.width=5}
+
+poncho(termite.plot.PA,phy=termite.phylo,env=env.RFAD$ant.pred.N,col=as.integer(DEF.RFAD),
+	ylab.bottom = "Ant density",xlab="Sampling units",col.gradient = "tomato",border="black")
 
 palette("default")
 
 ```
 
 
-```{r}
+```{r, eval=FALSE,echo=FALSE}
 
 par(mar=c(0,0,0,0),oma=c(0,0,0,0))
 
@@ -421,7 +807,7 @@ rect(x1,y1,x1+space.x,y1+space.y,col=c(1,4,3)[z[(!is.na(z))&z>0]])
 
 plot(phy,plot=FALSE,no.margin = TRUE,x.lim=25)
 
-rect(seq(13.5,25-space.x,length=nrow(z)),35,seq(13.5,25-space.x,length=nrow(z))+space,sort(env+35),col="dark grey")
+rect(seq(13.5,25-space.x,length=nrow(z)),35,seq(13.5,25-space.x,length=nrow(z))+space.x,sort(env+35),col="dark grey")
 
 text(25-(25-13.5)/2,15,xlab,cex=2)
 
@@ -432,90 +818,142 @@ text(13.2-.3,c(35,ceiling(max(env)+35)),c(0,ceiling(max(env))),adj=1)
 ```
 
 
-```{r calculates pcoas of composition and phylogenetic composition}
 
-pcoa.sor<-scores(cmdscale(sor.dist))
 
-pcoa.psor<-scores(cmdscale(psor.dist))
-pcoa.ufrac<-scores(cmdscale(ufrac.dist))
+```{r regr_first_phylocomp_axis_x_en,echo=FALSE,eval=FALSE}
 
-pcoa.sor.w<-scores(cmdscale(sor.dist.w))
+summary(lm(nmds.sor[,1]~env.RFAD$ant.pred.N))
+summary(lm(nmds.sor[,1]~env.RFAD$P))
+summary(lm(nmds.sor[,1]~env.RFAD$N.percentage))
+summary(lm(nmds.sor[,1]~env.RFAD$Clay))
 
-pcoa.psor.w<-scores(cmdscale(psor.dist.w))
-pcoa.ufrac.w<-scores(cmdscale(ufrac.dist.w))
+summary(lm(nmds.sor.w[,1]~env.RFAD$ant.pred.N))
+summary(lm(nmds.sor.w[,1]~env.RFAD$P))
+summary(lm(nmds.sor.w[,1]~env.RFAD$N.percentage))
+summary(lm(nmds.sor.w[,1]~env.RFAD$Clay))
 
-pcoa.sor.s<-scores(cmdscale(sor.dist.s))
-pcoa.psor.s<-scores(cmdscale(psor.dist.s))
-pcoa.ufrac.s<-scores(cmdscale(ufrac.dist.s))
+summary(lm(nmds.sor.s[,1]~env.RFAD$ant.pred.N))
+summary(lm(nmds.sor.s[,1]~env.RFAD$P))
+summary(lm(nmds.sor.s[,1]~env.RFAD$N.percentage))
+summary(lm(nmds.sor.s[,1]~env.RFAD$Clay))
 
+###
+
+summary(lm(nmds.psor[,1]~env.RFAD$ant.pred.N))
+summary(lm(nmds.psor[,1]~env.RFAD$P))
+summary(lm(nmds.psor[,1]~env.RFAD$N.percentage))
+summary(lm(nmds.psor[,1]~env.RFAD$Clay))
+
+summary(lm(nmds.psor.w[,1]~env.RFAD$ant.pred.N))
+summary(lm(nmds.psor.w[,1]~env.RFAD$P))
+summary(lm(nmds.psor.w[,1]~env.RFAD$N.percentage))
+summary(lm(nmds.psor.w[,1]~env.RFAD$Clay))
+
+summary(lm(nmds.psor.s[,1]~env.RFAD$ant.pred.N))
+summary(lm(nmds.psor.s[,1]~env.RFAD$P))
+summary(lm(nmds.psor.s[,1]~env.RFAD$N.percentage))
+summary(lm(nmds.psor.s[,1]~env.RFAD$Clay))
+
+###
+
+summary(lm(nmds.ufrac[,1]~env.RFAD$ant.pred.N))
+summary(lm(nmds.ufrac[,1]~env.RFAD$P))
+summary(lm(nmds.ufrac[,1]~env.RFAD$N.percentage))
+summary(lm(nmds.ufrac[,1]~env.RFAD$Clay))
+
+summary(lm(nmds.ufrac.w[,1]~env.RFAD$ant.pred.N))
+summary(lm(nmds.ufrac.w[,1]~env.RFAD$P))
+summary(lm(nmds.ufrac.w[,1]~env.RFAD$N.percentage))
+summary(lm(nmds.ufrac.w[,1]~env.RFAD$Clay))
+
+summary(lm(nmds.ufrac.s[,1]~env.RFAD$ant.pred.N))
+summary(lm(nmds.ufrac.s[,1]~env.RFAD$P))
+summary(lm(nmds.ufrac.s[,1]~env.RFAD$N.percentage))
+summary(lm(nmds.ufrac.s[,1]~env.RFAD$Clay))
+
+```
+
+```{r funct_diver,echo=FALSE,results='hide'}
+
+summary(lm(TG.fdis.ses~env.RFAD$ant.pred.N))
+summary(lm(TG.fdis.ses~env.RFAD$P))
+summary(lm(TG.fdis.ses~env.RFAD$N.percentage))
+summary(lm(TG.fdis.ses~env.RFAD$Vegetation.structure))
+
+summary(lm(DEF.fdis.ses~env.RFAD$ant.pred.N))
+summary(lm(DEF.fdis.ses~env.RFAD$P))
+summary(lm(DEF.fdis.ses~env.RFAD$N.percentage))
+summary(lm(DEF.fdis.ses~env.RFAD$Vegetation.structure))
+
+```
+
+```{r funct_comp,echo=FALSE,results='hide'}
+
+summary(lm(TG.nmds~env.RFAD$ant.pred.N))
+summary(lm(TG.nmds~env.RFAD$P))
+summary(lm(TG.nmds~env.RFAD$N.percentage))
+summary(lm(TG.nmds~env.RFAD$Vegetation.structure))
+
+summary(lm(DEF.nmds~env.RFAD$ant.pred.N))
+summary(lm(DEF.nmds~env.RFAD$P))
+summary(lm(DEF.nmds~env.RFAD$N.percentage))
+summary(lm(DEF.nmds~env.RFAD$Vegetation.structure))
+
+##
+
+summary(lm(TG.pcoa~env.RFAD$ant.pred.N))
+summary(lm(TG.pcoa~env.RFAD$P))
+summary(lm(TG.pcoa~env.RFAD$N.percentage))
+summary(lm(TG.pcoa~env.RFAD$Vegetation.structure))
+
+summary(lm(DEF.pcoa~env.RFAD$ant.pred.N))
+summary(lm(DEF.pcoa~env.RFAD$P))
+summary(lm(DEF.pcoa~env.RFAD$N.percentage))
+summary(lm(DEF.pcoa~env.RFAD$Vegetation.structure))
 
 ```
 
 
-```{r regression of the first phylogenetic composition axis with environment}
-
-summary(lm(pcoa.sor[,1]~env.RFAD$ant.pred.N))
-summary(lm(pcoa.sor[,1]~env.RFAD$P))
-summary(lm(pcoa.sor[,1]~env.RFAD$N.percentage))
-summary(lm(pcoa.sor[,1]~env.RFAD$Clay))
-
-summary(lm(pcoa.sor.w[,1]~env.RFAD$ant.pred.N))
-summary(lm(pcoa.sor.w[,1]~env.RFAD$P))
-summary(lm(pcoa.sor.w[,1]~env.RFAD$N.percentage))
-summary(lm(pcoa.sor.w[,1]~env.RFAD$Clay))
-
-summary(lm(pcoa.sor.s[,1]~env.RFAD$ant.pred.N))
-summary(lm(pcoa.sor.s[,1]~env.RFAD$P))
-summary(lm(pcoa.sor.s[,1]~env.RFAD$N.percentage))
-summary(lm(pcoa.sor.s[,1]~env.RFAD$Clay))
-
-###
-
-summary(lm(pcoa.psor[,1]~env.RFAD$ant.pred.N))
-summary(lm(pcoa.psor[,1]~env.RFAD$P))
-summary(lm(pcoa.psor[,1]~env.RFAD$N.percentage))
-summary(lm(pcoa.psor[,1]~env.RFAD$Clay))
-
-summary(lm(pcoa.psor.w[,1]~env.RFAD$ant.pred.N))
-summary(lm(pcoa.psor.w[,1]~env.RFAD$P))
-summary(lm(pcoa.psor.w[,1]~env.RFAD$N.percentage))
-summary(lm(pcoa.psor.w[,1]~env.RFAD$Clay))
-
-summary(lm(pcoa.psor.s[,1]~env.RFAD$ant.pred.N))
-summary(lm(pcoa.psor.s[,1]~env.RFAD$P))
-summary(lm(pcoa.psor.s[,1]~env.RFAD$N.percentage))
-summary(lm(pcoa.psor.s[,1]~env.RFAD$Clay))
-
-###
-
-summary(lm(pcoa.ufrac[,1]~env.RFAD$ant.pred.N))
-summary(lm(pcoa.ufrac[,1]~env.RFAD$P))
-summary(lm(pcoa.ufrac[,1]~env.RFAD$N.percentage))
-summary(lm(pcoa.ufrac[,1]~env.RFAD$Clay))
-
-summary(lm(pcoa.ufrac.w[,1]~env.RFAD$ant.pred.N))
-summary(lm(pcoa.ufrac.w[,1]~env.RFAD$P))
-summary(lm(pcoa.ufrac.w[,1]~env.RFAD$N.percentage))
-summary(lm(pcoa.ufrac.w[,1]~env.RFAD$Clay))
-
-summary(lm(pcoa.ufrac.s[,1]~env.RFAD$ant.pred.N))
-summary(lm(pcoa.ufrac.s[,1]~env.RFAD$P))
-summary(lm(pcoa.ufrac.s[,1]~env.RFAD$N.percentage))
-summary(lm(pcoa.ufrac.s[,1]~env.RFAD$Clay))
-
-
-```
-
-```{r table1}
+```{r table1, echo=FALSE,results='hide'}
 
 #####
 
-table1<-lapply(list(ses.pd$pd.obs.z,ses.mpd$mpd.obs.z,ses.mntd$mntd.obs.z,pcoa.sor[,1],pcoa.psor[,1],pcoa.ufrac[,1],ses.pd.w$pd.obs.z,ses.mpd.w$mpd.obs.z,ses.mntd.w$mntd.obs.z,pcoa.sor.w[,1],pcoa.psor.w[,1],pcoa.ufrac.w[,1],ses.pd.s$pd.obs.z,ses.mpd.s$mpd.obs.z,ses.mntd.s$mntd.obs.z,pcoa.sor.s[,1],pcoa.psor.s[,1],pcoa.ufrac.s[,1]),function(x){
+table1<-lapply(list(
 	
-	c(m.var=coef(M1<-lm(x~ant.pred.N+P+N.percentage+Clay,data=env.RFAD))[-1],
+	ses.pd$pd.obs.z,
+	ses.mpd$mpd.obs.z,
+	ses.mntd$mntd.obs.z,
+	pcoa.sor[,1],
+	pcoa.psor[,1],
+	pcoa.ufrac[,1],
+
+	ses.pd.w$pd.obs.z,
+	ses.mpd.w$mpd.obs.z,
+	ses.mntd.w$mntd.obs.z,
+	pcoa.sor.w[,1],
+	pcoa.psor.w[,1],
+	pcoa.ufrac.w[,1],
+	
+	ses.pd.s$pd.obs.z,
+	ses.mpd.s$mpd.obs.z,
+	ses.mntd.s$mntd.obs.z,
+	pcoa.sor.s[,1],
+	pcoa.psor.s[,1],
+	pcoa.ufrac.s[,1],
+	
+	TG.fdis,
+	DEF.fdis,
+	
+	TG.pcoa,
+	DEF.pcoa
+		
+	),function(x){
+	
+		
+	c(m.var=coef(M1<-lm(x~ant.pred.N+P+N.percentage+Vegetation.structure,data=env.RFAD))[-1],
 		m.df=summary(M1)$df[2],
 		m.F=summary(M1)$fstatistic[1],
-		m.var.rsq=summary(M1)$r.squared*100,
+		m.var.rsq=summary(M1)$adj.r.squared*100,
 		m.pval.p=anova(M1)[-5,"Pr(>F)"],
 		m.pval.t=pf(summary(M1)$fstatistic[1], summary(M1)$fstatistic[2], summary(M1)$fstatistic[3],lower.tail = FALSE),		
 		var=c(coef(update(M1,~ant.pred.N))[2],coef(update(M1,~P))[2],coef(update(M1,~N.percentage))[2],coef(update(M1,~Clay))[2]),
@@ -525,9 +963,11 @@ table1<-lapply(list(ses.pd$pd.obs.z,ses.mpd$mpd.obs.z,ses.mntd$mntd.obs.z,pcoa.s
 
 table1<-do.call(rbind,table1)
 
-rownames(table1)<-rep(c("PD","MPD","MNTD","PCoA.sor","PCoA.psor","PCoA.ufrac"),3)# for all, wood, soil
+rownames(table1)<-c(rep(c("PD","MPD","MNTD","PCoA.sor","PCoA.psor","PCoA.ufrac"),3),"TG.FD","DEF.FD","PCoA.TG","PCoA.DEF")# for all, wood, soil
 
 write.csv((round(table1,3)),"Table1.raw.csv")	
+
+table1[,7]<-ifelse(table1[,7]<0,0,table1[,7])
 
 pval.sym<-c("***"=0,"**"=0.001,"*"=0.01,"+"=0.05,0.1,1)
 
@@ -544,16 +984,32 @@ colnames(table1.f)<-gsub("var.","",colnames(table1.f))
 
 write.csv(table1.f,"Table1.final.csv")
 
+table1.1<-table1.f[,1:7]
+
+colnames(table1.1)<-c("N ant pred","P","N","N trees","df","F","r2")
+
+table1.1<-ifelse(table1.1=="0","0.000",table1.1)
+
+write.csv(table1.1,"Table1.1.final.csv")
 
 ```
-##
+
+\newpage
+
+
+# Summary of results in Table 1
+ 
+* Code for generating table not shown. You can check the results in the Regressions section 
+
+```{r show_table1,echo=FALSE}
+
+data.frame(response=rownames(table1.1),table1.1)
+
+```
 
 
 
-
-
-
-```{r plot phylo compo x env}
+```{r plot_phylocomp_x_env,echo=FALSE,eval=FALSE}
 
 plot(pcoa.psor[,1]~env.RFAD$ant.pred.N)
 plot(pcoa.psor[,1]~env.RFAD$P)
